@@ -6,10 +6,10 @@ const EXERCISES = [
     name: "Box Breathing",
     description: "Equal counts of inhale, hold, exhale, hold. Used by Navy SEALs for stress control and focus.",
     phases: [
-      { name: "Inhale", dur: 4, scale: 1.35, color: "#ffd060", glow: "#ffa020" },
-      { name: "Hold",   dur: 4, scale: 1.35, color: "#ff6030", glow: "#ff4010" },
-      { name: "Exhale", dur: 4, scale: 1,    color: "#e8308a", glow: "#c01070" },
-      { name: "Hold",   dur: 4, scale: 1,    color: "#7040d0", glow: "#5020b0" },
+      { name: "Inhale", dur: 4, scale: 1.35, color: "#f5c860", glow: "#e8a030" },
+      { name: "Hold",   dur: 4, scale: 1.35, color: "#f08050", glow: "#d86030" },
+      { name: "Exhale", dur: 4, scale: 1,    color: "#c86090", glow: "#a04070" },
+      { name: "Hold",   dur: 4, scale: 1,    color: "#7858b8", glow: "#5838a0" },
     ],
   },
   {
@@ -17,9 +17,9 @@ const EXERCISES = [
     name: "4-7-8",
     description: "Inhale 4s, hold 7s, exhale 8s. Activates the parasympathetic system — great before sleep.",
     phases: [
-      { name: "Inhale", dur: 4, scale: 1.35, color: "#ffd060", glow: "#ffa020" },
-      { name: "Hold",   dur: 7, scale: 1.35, color: "#ff6030", glow: "#ff4010" },
-      { name: "Exhale", dur: 8, scale: 1,    color: "#e8308a", glow: "#c01070" },
+      { name: "Inhale", dur: 4, scale: 1.35, color: "#f5c860", glow: "#e8a030" },
+      { name: "Hold",   dur: 7, scale: 1.35, color: "#f08050", glow: "#d86030" },
+      { name: "Exhale", dur: 8, scale: 1,    color: "#c86090", glow: "#a04070" },
     ],
   },
   {
@@ -27,8 +27,8 @@ const EXERCISES = [
     name: "Wim Hof",
     description: "30 deep power breaths, then exhale and hold. Energizing and invigorating. Sit or lie down safely.",
     phases: [
-      { name: "Inhale", dur: 1.5, scale: 1.4,  color: "#ffd060", glow: "#ffa020" },
-      { name: "Exhale", dur: 1.5, scale: 0.92, color: "#e8308a", glow: "#c01070" },
+      { name: "Inhale", dur: 1.5, scale: 1.4,  color: "#f5c860", glow: "#e8a030" },
+      { name: "Exhale", dur: 1.5, scale: 0.92, color: "#c86090", glow: "#a04070" },
     ],
     wimMode: true,
   },
@@ -37,8 +37,8 @@ const EXERCISES = [
     name: "Coherent",
     description: "5 seconds in, 5 seconds out. ~6 breaths per minute — the resonance frequency of the heart.",
     phases: [
-      { name: "Inhale", dur: 5, scale: 1.35, color: "#ffd060", glow: "#ffa020" },
-      { name: "Exhale", dur: 5, scale: 1,    color: "#e8308a", glow: "#c01070" },
+      { name: "Inhale", dur: 5, scale: 1.35, color: "#f5c860", glow: "#e8a030" },
+      { name: "Exhale", dur: 5, scale: 1,    color: "#c86090", glow: "#a04070" },
     ],
   },
 ];
@@ -165,9 +165,9 @@ function setCircle(scale, color, dur, glow) {
   circle.classList.add("animating");
   circle.style.transform = `translate(-50%, -50%) scale(${scale})`;
   circle.style.background = color;
-  circle.style.boxShadow = glow
-    ? `0 0 40px ${glow}cc, 0 0 80px ${glow}66, 0 0 120px ${glow}33`
-    : "none";
+  circle.style.boxShadow = glow ? `0 0 50px ${glow}99` : "none";
+  phaseName.style.color = "#fff";
+  phaseCount.style.color = "#fff";
 }
 
 function resetCircle() {
@@ -175,6 +175,8 @@ function resetCircle() {
   circle.style.transform = "translate(-50%, -50%) scale(1)";
   circle.style.background = "var(--circle-bg)";
   circle.style.boxShadow = "none";
+  phaseName.style.color = "";
+  phaseCount.style.color = "";
 }
 
 // --- Exercise runner ---
@@ -211,7 +213,7 @@ async function runExercise() {
       phaseName.textContent = "Hold out";
       phaseCount.textContent = "—";
       playTone(PHASE_TONES["Hold out"]);
-      setCircle(0.9, "#7040d0", 1, "#5020b0");
+      setCircle(0.9, "#7858b8", 1, "#5838a0");
       await sleep(15000);
     }
   } else {
