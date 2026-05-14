@@ -1,0 +1,360 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #fafafa;
+  --text: #1a1a1a;
+  --muted: #888;
+  --accent: #3a7bd5;
+  --circle-bg: #e8eef8;
+  --card-bg: #fff;
+  --border: #e4e4e4;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+header {
+  width: 100%;
+  padding: 2rem 1.5rem 0;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+header p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 0.3rem;
+}
+
+.exercises {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  padding: 1.5rem 1.5rem 0;
+  max-width: 640px;
+  width: 100%;
+}
+
+.exercise-btn {
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  border-radius: 2rem;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.exercise-btn:hover { border-color: var(--accent); }
+
+.exercise-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.exercise-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Non-color active indicator for colour-blind users */
+.exercise-btn.active::after {
+  content: " ✓";
+  font-size: 0.75em;
+  opacity: 0.85;
+}
+
+.info-card {
+  margin: 1rem 1.5rem 0;
+  max-width: 480px;
+  width: calc(100% - 3rem);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.info-card h2 { font-size: 1rem; font-weight: 600; }
+
+.info-card p {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
+
+.phase-pills {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.pill {
+  font-size: 0.75rem;
+  background: var(--circle-bg);
+  border-radius: 1rem;
+  padding: 0.2rem 0.6rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.arena {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem 1.5rem;
+  gap: 1.5rem;
+}
+
+.circle-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+}
+
+.circle {
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: var(--circle-bg);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  transition: transform 0s linear, background 0.4s;
+  will-change: transform;
+}
+
+.circle.animating {
+  transition: transform var(--dur, 4s) cubic-bezier(0.45, 0.05, 0.55, 0.95),
+              background 0.6s ease;
+}
+
+.circle-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.phase-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.phase-count {
+  font-size: 2.2rem;
+  font-weight: 300;
+  line-height: 1;
+  margin-top: 0.1rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.btn-start {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 2rem;
+  padding: 0.65rem 2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.btn-start:hover { opacity: 0.85; }
+
+.btn-start:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.btn-reset {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 2rem;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--muted);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-reset:hover { border-color: var(--text); color: var(--text); }
+
+.btn-reset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rounds-info {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+  min-height: 1.2em;
+}
+
+.rounds-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.rounds-control button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: none;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+.rounds-control button:hover:not(:disabled) { border-color: var(--accent); }
+
+.rounds-control button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.rounds-control button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Utility buttons (fullscreen) */
+.btn-util {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.3rem;
+  cursor: pointer;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+  line-height: 1;
+  z-index: 10;
+}
+
+.btn-util:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-util:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Wim Hof modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1.5rem;
+}
+
+.modal-overlay[hidden] { display: none; }
+
+.modal {
+  background: var(--card-bg);
+  border-radius: 14px;
+  padding: 1.5rem;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.modal h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.modal p {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.modal ul {
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding-left: 1.25rem;
+  margin-bottom: 1.25rem;
+  line-height: 1.8;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+footer {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--border);
+}
+
+@media (max-width: 500px) {
+  header { padding: 0.75rem 1.5rem 0; }
+  header h1 { font-size: 1.3rem; }
+  header p { display: none; }
+
+  .exercises { padding: 0.75rem 1rem 0; gap: 0.5rem; }
+  .exercise-btn { padding: 0.35rem 0.85rem; font-size: 0.8rem; }
+
+  .info-card { margin: 0.6rem 1rem 0; padding: 0.65rem 1rem; }
+  .info-card p { display: none; }
+  .phase-pills { margin-top: 0.5rem; }
+
+  .arena { padding: 0.75rem 1.5rem 0.75rem; gap: 1rem; }
+  .circle-wrap { width: 170px; height: 170px; }
+  .circle { width: 120px; height: 120px; }
+}
+
+@media (max-width: 380px) {
+  .circle-wrap { width: 150px; height: 150px; }
+  .circle { width: 105px; height: 105px; }
+}
