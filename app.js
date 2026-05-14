@@ -67,6 +67,7 @@ const navEl         = document.getElementById("exerciseNav");
 const infoCard      = document.getElementById("infoCard");
 const wimModal      = document.getElementById("wimModal");
 const btnFullscreen = document.getElementById("btnFullscreen");
+const btnTheme      = document.getElementById("btnTheme");
 const incRoundsBtn  = document.getElementById("incRounds");
 const decRoundsBtn  = document.getElementById("decRounds");
 
@@ -289,6 +290,24 @@ incRoundsBtn.addEventListener("click", () => {
 decRoundsBtn.addEventListener("click", () => {
   if (!state.running && state.totalRounds > 1) { state.totalRounds--; updateRoundsLabel(); }
 });
+
+// --- Theme ---
+const ICON_MOON = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9A6 6 0 1 1 5 2a4 4 0 0 0 7 7z"/></svg>`;
+const ICON_SUN  = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="2.5"/><line x1="7" y1="1" x2="7" y2="2.5"/><line x1="7" y1="11.5" x2="7" y2="13"/><line x1="1" y1="7" x2="2.5" y2="7"/><line x1="11.5" y1="7" x2="13" y2="7"/><line x1="2.93" y1="2.93" x2="3.99" y2="3.99"/><line x1="10.01" y1="10.01" x2="11.07" y2="11.07"/><line x1="2.93" y1="11.07" x2="3.99" y2="10.01"/><line x1="10.01" y1="3.99" x2="11.07" y2="2.93"/></svg>`;
+
+function applyTheme(dark) {
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  btnTheme.innerHTML = dark ? ICON_SUN : ICON_MOON;
+  btnTheme.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  localStorage.setItem("theme", dark ? "dark" : "light");
+}
+
+btnTheme.addEventListener("click", () => {
+  applyTheme(document.documentElement.dataset.theme !== "dark");
+});
+
+const savedTheme = localStorage.getItem("theme");
+applyTheme(savedTheme ? savedTheme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches);
 
 // --- Fullscreen ---
 const ICON_EXPAND   = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9"/></svg>`;
