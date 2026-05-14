@@ -6,10 +6,10 @@ const EXERCISES = [
     name: "Box Breathing",
     description: "Equal counts of inhale, hold, exhale, hold. Used by Navy SEALs for stress control and focus.",
     phases: [
-      { name: "Inhale", dur: 4, scale: 1.35, color: "#fbbf5e" },
-      { name: "Hold",   dur: 4, scale: 1.35, color: "#f07848" },
-      { name: "Exhale", dur: 4, scale: 1,    color: "#e05882" },
-      { name: "Hold",   dur: 4, scale: 1,    color: "#8858c8" },
+      { name: "Inhale", dur: 4, scale: 1.35, color: "#ffd060", glow: "#ffa020" },
+      { name: "Hold",   dur: 4, scale: 1.35, color: "#ff6030", glow: "#ff4010" },
+      { name: "Exhale", dur: 4, scale: 1,    color: "#e8308a", glow: "#c01070" },
+      { name: "Hold",   dur: 4, scale: 1,    color: "#7040d0", glow: "#5020b0" },
     ],
   },
   {
@@ -17,9 +17,9 @@ const EXERCISES = [
     name: "4-7-8",
     description: "Inhale 4s, hold 7s, exhale 8s. Activates the parasympathetic system — great before sleep.",
     phases: [
-      { name: "Inhale", dur: 4, scale: 1.35, color: "#fbbf5e" },
-      { name: "Hold",   dur: 7, scale: 1.35, color: "#f07848" },
-      { name: "Exhale", dur: 8, scale: 1,    color: "#e05882" },
+      { name: "Inhale", dur: 4, scale: 1.35, color: "#ffd060", glow: "#ffa020" },
+      { name: "Hold",   dur: 7, scale: 1.35, color: "#ff6030", glow: "#ff4010" },
+      { name: "Exhale", dur: 8, scale: 1,    color: "#e8308a", glow: "#c01070" },
     ],
   },
   {
@@ -27,8 +27,8 @@ const EXERCISES = [
     name: "Wim Hof",
     description: "30 deep power breaths, then exhale and hold. Energizing and invigorating. Sit or lie down safely.",
     phases: [
-      { name: "Inhale", dur: 1.5, scale: 1.4,  color: "#fbbf5e" },
-      { name: "Exhale", dur: 1.5, scale: 0.92, color: "#e05882" },
+      { name: "Inhale", dur: 1.5, scale: 1.4,  color: "#ffd060", glow: "#ffa020" },
+      { name: "Exhale", dur: 1.5, scale: 0.92, color: "#e8308a", glow: "#c01070" },
     ],
     wimMode: true,
   },
@@ -37,8 +37,8 @@ const EXERCISES = [
     name: "Coherent",
     description: "5 seconds in, 5 seconds out. ~6 breaths per minute — the resonance frequency of the heart.",
     phases: [
-      { name: "Inhale", dur: 5, scale: 1.35, color: "#fbbf5e" },
-      { name: "Exhale", dur: 5, scale: 1,    color: "#e05882" },
+      { name: "Inhale", dur: 5, scale: 1.35, color: "#ffd060", glow: "#ffa020" },
+      { name: "Exhale", dur: 5, scale: 1,    color: "#e8308a", glow: "#c01070" },
     ],
   },
 ];
@@ -158,26 +158,30 @@ wimModal.addEventListener("click", e => { if (e.target === wimModal) wimModal.hi
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !wimModal.hidden) wimModal.hidden = true; });
 
 // --- Circle ---
-function setCircle(scale, color, dur) {
+function setCircle(scale, color, dur, glow) {
   circle.style.setProperty("--dur", dur + "s");
   circle.classList.remove("animating");
   void circle.offsetWidth; // force reflow so transition restarts
   circle.classList.add("animating");
   circle.style.transform = `translate(-50%, -50%) scale(${scale})`;
   circle.style.background = color;
+  circle.style.boxShadow = glow
+    ? `0 0 40px ${glow}cc, 0 0 80px ${glow}66, 0 0 120px ${glow}33`
+    : "none";
 }
 
 function resetCircle() {
   circle.classList.remove("animating");
   circle.style.transform = "translate(-50%, -50%) scale(1)";
   circle.style.background = "var(--circle-bg)";
+  circle.style.boxShadow = "none";
 }
 
 // --- Exercise runner ---
-async function countdown(seconds, label, scale, color) {
+async function countdown(seconds, label, scale, color, glow) {
   const tone = PHASE_TONES[label];
   if (tone) playTone(tone);
-  setCircle(scale, color, seconds);
+  setCircle(scale, color, seconds, glow);
   for (let s = seconds; s >= 1; s--) {
     if (state.stopFlag) break;
     phaseName.textContent = label;
@@ -199,7 +203,7 @@ async function runExercise() {
       roundsInfo.textContent = `Breath ${state.wimBreath} of ${WIM_BREATHS}`;
       for (const phase of state.currentEx.phases) {
         if (state.stopFlag) break;
-        await countdown(phase.dur, phase.name, phase.scale, phase.color);
+        await countdown(phase.dur, phase.name, phase.scale, phase.color, phase.glow);
       }
     }
     if (!state.stopFlag) {
@@ -207,7 +211,7 @@ async function runExercise() {
       phaseName.textContent = "Hold out";
       phaseCount.textContent = "—";
       playTone(PHASE_TONES["Hold out"]);
-      setCircle(0.9, "#8858c8", 1);
+      setCircle(0.9, "#7040d0", 1, "#5020b0");
       await sleep(15000);
     }
   } else {
@@ -216,7 +220,7 @@ async function runExercise() {
       roundsInfo.textContent = `Round ${r} of ${state.totalRounds}`;
       for (const phase of state.currentEx.phases) {
         if (state.stopFlag) break;
-        await countdown(phase.dur, phase.name, phase.scale, phase.color);
+        await countdown(phase.dur, phase.name, phase.scale, phase.color, phase.glow);
       }
     }
   }
