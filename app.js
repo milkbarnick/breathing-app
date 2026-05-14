@@ -184,11 +184,15 @@ async function countdown(seconds, label, scale, color, glow) {
   const tone = PHASE_TONES[label];
   if (tone) playTone(tone);
   setCircle(scale, color, seconds, glow);
+  const start = performance.now();
+  let tick = 1;
   for (let s = seconds; s >= 1; s--) {
     if (state.stopFlag) break;
     phaseName.textContent = label;
     phaseCount.textContent = s;
-    await sleep(1000);
+    const target = start + tick * 1000;
+    await sleep(Math.max(0, target - performance.now()));
+    tick++;
   }
 }
 
