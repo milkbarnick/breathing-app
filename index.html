@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Breathe</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #fafafa;
+      --text: #1a1a1a;
+      --muted: #888;
+      --accent: #3a7bd5;
+      --circle-bg: #e8eef8;
+      --card-bg: #fff;
+      --border: #e4e4e4;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      width: 100%;
+      padding: 2rem 1.5rem 0;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 0.3rem;
+    }
+
+    .exercises {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+      padding: 1.5rem 1.5rem 0;
+      max-width: 640px;
+      width: 100%;
+    }
+
+    .exercise-btn {
+      border: 1.5px solid var(--border);
+      background: var(--card-bg);
+      border-radius: 2rem;
+      padding: 0.5rem 1.1rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      color: var(--text);
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+
+    .exercise-btn:hover { border-color: var(--accent); }
+
+    .exercise-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .info-card {
+      margin: 1rem 1.5rem 0;
+      max-width: 480px;
+      width: calc(100% - 3rem);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+    }
+
+    .info-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .info-card p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+      line-height: 1.5;
+    }
+
+    .phase-pills {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .pill {
+      font-size: 0.75rem;
+      background: var(--circle-bg);
+      border-radius: 1rem;
+      padding: 0.2rem 0.6rem;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .arena {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem 1.5rem;
+      gap: 1.5rem;
+    }
+
+    .circle-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+    }
+
+    .circle {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: var(--circle-bg);
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      transition: transform 0s linear, background 0.4s;
+      will-change: transform;
+    }
+
+    .circle.animating {
+      transition: transform var(--dur, 4s) ease-in-out, background 0.4s;
+    }
+
+    .circle-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .phase-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .phase-count {
+      font-size: 2.2rem;
+      font-weight: 300;
+      line-height: 1;
+      margin-top: 0.1rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .btn-start {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 2rem;
+      padding: 0.65rem 2rem;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+
+    .btn-start:hover { opacity: 0.85; }
+
+    .btn-reset {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 2rem;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: var(--muted);
+      transition: border-color 0.15s;
+    }
+
+    .btn-reset:hover { border-color: var(--text); color: var(--text); }
+
+    .rounds-info {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .rounds-control {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .rounds-control button {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border);
+      background: none;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s;
+    }
+
+    .rounds-control button:hover { border-color: var(--accent); }
+
+    footer {
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--border);
+    }
+
+    @media (max-width: 400px) {
+      .circle-wrap { width: 180px; height: 180px; }
+      .circle { width: 130px; height: 130px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Breathe</h1>
+  <p>Simple guided breathing exercises</p>
+</header>
+
+<div class="exercises" id="exerciseNav"></div>
+
+<div class="info-card" id="infoCard"></div>
+
+<div class="arena">
+  <div class="circle-wrap">
+    <div class="circle" id="circle"></div>
+    <div class="circle-label">
+      <div class="phase-name" id="phaseName">Ready</div>
+      <div class="phase-count" id="phaseCount">—</div>
+    </div>
+  </div>
+
+  <div class="rounds-control">
+    <button id="decRounds" aria-label="Decrease rounds">−</button>
+    <span id="roundsLabel">4 rounds</span>
+    <button id="incRounds" aria-label="Increase rounds">+</button>
+  </div>
+
+  <div class="controls">
+    <button class="btn-reset" id="btnReset">Reset</button>
+    <button class="btn-start" id="btnStart">Start</button>
+  </div>
+
+  <div class="rounds-info" id="roundsInfo"></div>
+</div>
+
+<footer>No data collected &middot; Works offline</footer>
+
+<script>
+  const EXERCISES = [
+    {
+      id: "box",
+      name: "Box Breathing",
+      description: "Equal counts of inhale, hold, exhale, hold. Used by Navy SEALs for stress control and focus.",
+      phases: [
+        { name: "Inhale",  dur: 4, scale: 1.35, color: "#dce8f8" },
+        { name: "Hold",    dur: 4, scale: 1.35, color: "#c8ddf4" },
+        { name: "Exhale",  dur: 4, scale: 1,    color: "#e8eef8" },
+        { name: "Hold",    dur: 4, scale: 1,    color: "#e8eef8" },
+      ],
+    },
+    {
+      id: "478",
+      name: "4-7-8",
+      description: "Inhale 4s, hold 7s, exhale 8s. Activates the parasympathetic system — great before sleep.",
+      phases: [
+        { name: "Inhale",  dur: 4, scale: 1.35, color: "#dce8f8" },
+        { name: "Hold",    dur: 7, scale: 1.35, color: "#c8ddf4" },
+        { name: "Exhale",  dur: 8, scale: 1,    color: "#e8eef8" },
+      ],
+    },
+    {
+      id: "wim",
+      name: "Wim Hof",
+      description: "30 deep power breaths, then exhale and hold. Energizing and invigorating. Sit or lie down safely.",
+      phases: [
+        { name: "Inhale",  dur: 1.5, scale: 1.4,  color: "#dce8f8" },
+        { name: "Exhale",  dur: 1.5, scale: 0.92, color: "#e8eef8" },
+      ],
+      wimMode: true,
+    },
+    {
+      id: "coherent",
+      name: "Coherent",
+      description: "5 seconds in, 5 seconds out. ~6 breaths per minute — the resonance frequency of the heart.",
+      phases: [
+        { name: "Inhale",  dur: 5, scale: 1.35, color: "#dce8f8" },
+        { name: "Exhale",  dur: 5, scale: 1,    color: "#e8eef8" },
+      ],
+    },
+  ];
+
+  let currentEx = EXERCISES[0];
+  let totalRounds = 4;
+  let running = false;
+  let stopFlag = false;
+  let currentRound = 0;
+  let wimBreath = 0;
+  const WIM_BREATHS = 30;
+
+  const circle    = document.getElementById("circle");
+  const phaseName = document.getElementById("phaseName");
+  const phaseCount= document.getElementById("phaseCount");
+  const btnStart  = document.getElementById("btnStart");
+  const btnReset  = document.getElementById("btnReset");
+  const roundsLbl = document.getElementById("roundsLabel");
+  const roundsInfo= document.getElementById("roundsInfo");
+  const navEl     = document.getElementById("exerciseNav");
+  const infoCard  = document.getElementById("infoCard");
+
+  function renderNav() {
+    navEl.innerHTML = "";
+    EXERCISES.forEach(ex => {
+      const btn = document.createElement("button");
+      btn.className = "exercise-btn" + (ex === currentEx ? " active" : "");
+      btn.textContent = ex.name;
+      btn.addEventListener("click", () => { if (!running) selectEx(ex); });
+      navEl.appendChild(btn);
+    });
+  }
+
+  function renderInfo() {
+    const phases = currentEx.phases;
+    const pills = phases.map(p => `<span class="pill">${p.name} ${p.dur}s</span>`).join("");
+    const extra = currentEx.wimMode ? `<span class="pill">×${WIM_BREATHS} breaths</span>` : "";
+    infoCard.innerHTML = `
+      <h2>${currentEx.name}</h2>
+      <p>${currentEx.description}</p>
+      <div class="phase-pills">${pills}${extra}</div>
+    `;
+  }
+
+  function selectEx(ex) {
+    currentEx = ex;
+    renderNav();
+    renderInfo();
+    resetUI();
+  }
+
+  function updateRoundsLabel() {
+    roundsLbl.textContent = `${totalRounds} round${totalRounds !== 1 ? "s" : ""}`;
+  }
+
+  document.getElementById("incRounds").addEventListener("click", () => {
+    if (!running && totalRounds < 20) { totalRounds++; updateRoundsLabel(); }
+  });
+  document.getElementById("decRounds").addEventListener("click", () => {
+    if (!running && totalRounds > 1) { totalRounds--; updateRoundsLabel(); }
+  });
+
+  function setCircle(scale, color, dur) {
+    circle.style.setProperty("--dur", dur + "s");
+    circle.classList.remove("animating");
+    void circle.offsetWidth;
+    circle.classList.add("animating");
+    circle.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    circle.style.background = color;
+  }
+
+  function resetCircle() {
+    circle.classList.remove("animating");
+    circle.style.transform = "translate(-50%, -50%) scale(1)";
+    circle.style.background = "var(--circle-bg)";
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => {
+      let id;
+      const check = () => { if (stopFlag) resolve(); else id = setTimeout(resolve, 50); };
+      id = setTimeout(resolve, ms);
+      const interval = setInterval(() => { if (stopFlag) { clearTimeout(id); clearInterval(interval); resolve(); } }, 50);
+    });
+  }
+
+  function countdown(seconds, label, scale, color) {
+    return new Promise(async resolve => {
+      setCircle(scale, color, seconds);
+      for (let s = seconds; s >= 1; s--) {
+        if (stopFlag) break;
+        phaseName.textContent = label;
+        phaseCount.textContent = s;
+        await sleep(1000);
+      }
+      resolve();
+    });
+  }
+
+  async function runExercise() {
+    running = true;
+    stopFlag = false;
+    btnStart.textContent = "Pause";
+    currentRound = 0;
+
+    if (currentEx.wimMode) {
+      for (wimBreath = 1; wimBreath <= WIM_BREATHS && !stopFlag; wimBreath++) {
+        roundsInfo.textContent = `Breath ${wimBreath} of ${WIM_BREATHS}`;
+        for (const phase of currentEx.phases) {
+          if (stopFlag) break;
+          await countdown(phase.dur, phase.name, phase.scale, phase.color);
+        }
+      }
+      if (!stopFlag) {
+        roundsInfo.textContent = "Hold (exhale & hold as long as comfortable)";
+        phaseName.textContent = "Hold out";
+        phaseCount.textContent = "—";
+        setCircle(0.9, "#e0e8f4", 1);
+        await sleep(15000);
+      }
+    } else {
+      for (let r = 1; r <= totalRounds && !stopFlag; r++) {
+        currentRound = r;
+        roundsInfo.textContent = `Round ${r} of ${totalRounds}`;
+        for (const phase of currentEx.phases) {
+          if (stopFlag) break;
+          await countdown(phase.dur, phase.name, phase.scale, phase.color);
+        }
+      }
+    }
+
+    if (!stopFlag) {
+      phaseName.textContent = "Done";
+      phaseCount.textContent = "✓";
+      roundsInfo.textContent = "Great work!";
+      resetCircle();
+    }
+
+    running = false;
+    btnStart.textContent = "Start";
+  }
+
+  function resetUI() {
+    stopFlag = true;
+    running = false;
+    setTimeout(() => {
+      resetCircle();
+      phaseName.textContent = "Ready";
+      phaseCount.textContent = "—";
+      roundsInfo.textContent = "";
+      btnStart.textContent = "Start";
+    }, 80);
+  }
+
+  btnStart.addEventListener("click", () => {
+    if (running) {
+      stopFlag = true;
+      running = false;
+      btnStart.textContent = "Start";
+      resetCircle();
+    } else {
+      runExercise();
+    }
+  });
+
+  btnReset.addEventListener("click", resetUI);
+
+  renderNav();
+  renderInfo();
+  updateRoundsLabel();
+</script>
+</body>
+</html>
