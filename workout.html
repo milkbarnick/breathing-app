@@ -695,7 +695,7 @@ function openNewPlan() {
   document.getElementById('planName').value = '';
   document.getElementById('planDesc').value = '';
   renderPlanExs();
-  open('planModal');
+  openModal('planModal');
 }
 function openEditPlan(id) {
   const p = getPlan(id); if(!p) return;
@@ -705,7 +705,7 @@ function openEditPlan(id) {
   document.getElementById('planName').value = p.name;
   document.getElementById('planDesc').value = p.desc||'';
   renderPlanExs();
-  open('planModal');
+  openModal('planModal');
 }
 function renderPlanExs() {
   const el = document.getElementById('planExList');
@@ -732,7 +732,7 @@ function deletePlan(id) {
 }
 
 document.getElementById('newPlanBtn').addEventListener('click', openNewPlan);
-document.getElementById('cancelPlanBtn').addEventListener('click', ()=>close('planModal'));
+document.getElementById('cancelPlanBtn').addEventListener('click', ()=>closeModal('planModal'));
 document.getElementById('savePlanBtn').addEventListener('click', ()=>{
   const name = document.getElementById('planName').value.trim();
   if (!name) { alert('Enter a plan name.'); return; }
@@ -744,7 +744,7 @@ document.getElementById('savePlanBtn').addEventListener('click', ()=>{
   } else {
     plans.push({id:uid(),...obj});
   }
-  S.set('plans',plans); close('planModal'); renderPlans();
+  S.set('plans',plans); closeModal('planModal'); renderPlans();
 });
 document.getElementById('addExBtn').addEventListener('click', ()=>{
   const exs = S.get('exercises',[]);
@@ -754,21 +754,21 @@ document.getElementById('addExBtn').addEventListener('click', ()=>{
   document.getElementById('exSets').value=3;
   document.getElementById('exReps').value=10;
   document.getElementById('exWeight').value=0;
-  open('exPickerModal');
+  openModal('exPickerModal');
 });
-document.getElementById('cancelExPickerBtn').addEventListener('click',()=>close('exPickerModal'));
+document.getElementById('cancelExPickerBtn').addEventListener('click',()=>closeModal('exPickerModal'));
 document.getElementById('confirmExPickerBtn').addEventListener('click',()=>{
   const id=document.getElementById('exPicker').value;
-  if (id==='__new__') { close('exPickerModal'); open('customExModal'); return; }
+  if (id==='__new__') { closeModal('exPickerModal'); openModal('customExModal'); return; }
   ST.editPlanExs.push({
     exerciseId:id,
     sets:parseInt(document.getElementById('exSets').value)||3,
     reps:parseInt(document.getElementById('exReps').value)||10,
     weight:parseFloat(document.getElementById('exWeight').value)||0,
   });
-  close('exPickerModal'); renderPlanExs();
+  closeModal('exPickerModal'); renderPlanExs();
 });
-document.getElementById('cancelCustomExBtn').addEventListener('click',()=>{ close('customExModal'); open('exPickerModal'); });
+document.getElementById('cancelCustomExBtn').addEventListener('click',()=>{ closeModal('customExModal'); openModal('exPickerModal'); });
 document.getElementById('saveCustomExBtn').addEventListener('click',()=>{
   const name=document.getElementById('customExName').value.trim();
   if(!name){alert('Enter a name.');return;}
@@ -780,7 +780,7 @@ document.getElementById('saveCustomExBtn').addEventListener('click',()=>{
   pk.innerHTML=exs.map(e=>`<option value="${e.id}">${e.name} (${e.mg})</option>`).join('')
     +'<option value="__new__">+ Add Custom Exercise...</option>';
   pk.value=ne.id;
-  close('customExModal'); open('exPickerModal');
+  closeModal('customExModal'); openModal('exPickerModal');
 });
 
 // ======================================================
@@ -817,13 +817,13 @@ function openSchedModal(day) {
   const pk=document.getElementById('schedPlanPicker');
   pk.innerHTML='<option value="">&#x2014; Rest Day &#x2014;</option>'+plans.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   pk.value=sc[day]||'';
-  open('schedModal');
+  openModal('schedModal');
 }
-document.getElementById('cancelSchedBtn').addEventListener('click',()=>close('schedModal'));
+document.getElementById('cancelSchedBtn').addEventListener('click',()=>closeModal('schedModal'));
 document.getElementById('saveSchedBtn').addEventListener('click',()=>{
   const sc=S.get('schedule',{}), v=document.getElementById('schedPlanPicker').value;
   if(v) sc[ST.schedDay]=v; else delete sc[ST.schedDay];
-  S.set('schedule',sc); close('schedModal'); renderSchedule();
+  S.set('schedule',sc); closeModal('schedModal'); renderSchedule();
 });
 
 // ======================================================
@@ -901,7 +901,7 @@ function openStartLogModal() {
   const plans=S.get('plans',[]);
   const pk=document.getElementById('logPlanPicker');
   pk.innerHTML=plans.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  open('startLogModal');
+  openModal('startLogModal');
 }
 function setVal(ei,si,field,val) {
   if(!ST.activeLog) return;
@@ -927,13 +927,13 @@ function finishLog()  {
   ST.activeLog=null; switchTab('history');
 }
 
-document.getElementById('cancelStartLogBtn').addEventListener('click',()=>close('startLogModal'));
+document.getElementById('cancelStartLogBtn').addEventListener('click',()=>closeModal('startLogModal'));
 document.getElementById('confirmStartLogBtn').addEventListener('click',()=>{
   const id=document.getElementById('logPlanPicker').value;
-  close('startLogModal'); startLogWith(id);
+  closeModal('startLogModal'); startLogWith(id);
 });
 
-// keep timer ticking
+// keep timer ticking every 30s while workout is active
 setInterval(()=>{
   if(ST.activeLog && ST.tab==='log'){
     const el=document.getElementById('timerDisplay');
@@ -974,7 +974,6 @@ function drawChart(logs) {
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
   const dpr=window.devicePixelRatio||1;
-  // Use clientWidth or fallback
   const W=canvas.parentElement.clientWidth||600;
   const H=180;
   canvas.width=W*dpr; canvas.height=H*dpr;
@@ -982,7 +981,8 @@ function drawChart(logs) {
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
 
-  const recent=[...logs].reverse().slice(0,20);
+  // logs arrives newest-first; take 20 newest then reverse for chronological display
+  const recent=logs.slice(0,20).reverse();
   if(recent.length<2){
     ctx.fillStyle='#9090a8'; ctx.font='13px sans-serif'; ctx.textAlign='center';
     ctx.fillText('Complete more workouts to see your progress chart',W/2,H/2);
@@ -1026,7 +1026,7 @@ function drawChart(logs) {
     const y=pT+cH-vols[i]/maxV*cH;
     ctx.fillStyle='#6c63ff';
     ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg')||'#0f0f13';
+    ctx.fillStyle='#0f0f13';
     ctx.beginPath(); ctx.arc(x,y,2,0,Math.PI*2); ctx.fill();
   });
 
@@ -1061,20 +1061,20 @@ function viewLog(id) {
             Set ${i+1}: ${s.reps} reps &times; ${s.weight} lbs ${s.done?'&#x2705;':'&#x25CB;'}
           </div>`).join('')}
       </div>`).join('')}`;
-  open('logDetailModal');
+  openModal('logDetailModal');
 }
-document.getElementById('closeLogDetailBtn').addEventListener('click',()=>close('logDetailModal'));
+document.getElementById('closeLogDetailBtn').addEventListener('click',()=>closeModal('logDetailModal'));
 document.getElementById('deleteLogBtn').addEventListener('click',()=>{
   if(!confirm('Delete this workout log?')) return;
   S.set('logs',S.get('logs',[]).filter(l=>l.id!==ST.viewLogId));
-  close('logDetailModal'); renderHistory();
+  closeModal('logDetailModal'); renderHistory();
 });
 
 // ======================================================
 // MODAL HELPERS
 // ======================================================
-function open(id)  { document.getElementById(id).classList.add('open'); }
-function close(id) { document.getElementById(id).classList.remove('open'); }
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(o=>{
   o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('open'); });
 });
