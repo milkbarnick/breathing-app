@@ -226,7 +226,8 @@ function fmtPaceFromSpeed(mps) {
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg) {
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+  const duration = Math.min(12000, Math.max(2600, msg.length * 80));
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), duration);
 }
 function openModal(html) {
   document.getElementById('logModalBody').innerHTML = html;
@@ -266,13 +267,25 @@ async function handleOAuthRedirect() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ grant_type: 'authorization_code', code }),
     });
-    if (!resp.ok) throw new Error('Token exchange failed: ' + resp.status);
+    if (!resp.ok) throw new Error(await describeStravaError(resp));
     const data = await resp.json();
     applyStravaTokens(data);
     toast('Strava connected ✓');
   } catch (err) {
     toast('Strava connect failed: ' + err.message);
   }
+}
+async function describeStravaError(resp) {
+  let bodyText = '';
+  try { bodyText = await resp.text(); } catch {}
+  try {
+    const j = JSON.parse(bodyText);
+    if (j.message) {
+      const detail = (j.errors || []).map(e => `${e.resource || ''} ${e.field || ''} ${e.code || ''}`.trim()).join(', ');
+      return `Strava error ${resp.status}: ${j.message}${detail ? ' (' + detail + ')' : ''}`;
+    }
+  } catch {}
+  return `Strava error ${resp.status}${bodyText ? ': ' + bodyText.slice(0, 200) : ''}`;
 }
 function applyStravaTokens(data) {
   const s = getSettings();
@@ -291,7 +304,7 @@ async function ensureStravaToken() {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: s.stravaRefreshToken }),
   });
-  if (!resp.ok) throw new Error('Strava token refresh failed');
+  if (!resp.ok) throw new Error(await describeStravaError(resp));
   const data = await resp.json();
   applyStravaTokens(data);
   return data.access_token;
@@ -301,7 +314,7 @@ async function fetchStravaActivities(afterEpoch) {
   const token = await ensureStravaToken();
   const url = `${s.workerUrl.replace(/\/$/, '')}/api/athlete/activities?after=${afterEpoch}&per_page=100`;
   const resp = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  if (!resp.ok) throw new Error('Strava fetch failed: ' + resp.status);
+  if (!resp.ok) throw new Error(await describeStravaError(resp));
   return resp.json();
 }
 async function syncStrava(silent) {
