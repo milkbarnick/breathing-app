@@ -282,7 +282,9 @@ async function describeStravaError(resp) {
     const j = JSON.parse(bodyText);
     if (j.message) {
       const detail = (j.errors || []).map(e => `${e.resource || ''} ${e.field || ''} ${e.code || ''}`.trim()).join(', ');
-      return `Strava error ${resp.status}: ${j.message}${detail ? ' (' + detail + ')' : ''}`;
+      const d = j._debug;
+      const dbg = d ? ` [worker sent client_id=${d.clientIdPreview || 'MISSING'} (len ${d.clientIdLength}), secret set=${d.clientSecretSet} (len ${d.clientSecretLength})]` : '';
+      return `Strava error ${resp.status}: ${j.message}${detail ? ' (' + detail + ')' : ''}${dbg}`;
     }
   } catch {}
   return `Strava error ${resp.status}${bodyText ? ': ' + bodyText.slice(0, 200) : ''}`;

@@ -29,10 +29,12 @@ function withCors(resp, origin) {
 
 async function handleTokenExchange(request, env, origin) {
   const body = await request.json();
-  const params = new URLSearchParams({
-    client_id: env.STRAVA_CLIENT_ID,
-    client_secret: env.STRAVA_CLIENT_SECRET,
-  });
+  // .trim() guards against a stray trailing space/newline from copy-pasting
+  // the Client ID/Secret into the Cloudflare dashboard — a common invisible
+  // cause of Strava rejecting an otherwise-correct client_id.
+  const clientId = (env.STRAVA_CLIENT_ID || '').trim();
+  const clientSecret = (env.STRAVA_CLIENT_SECRET || '').trim();
+  const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret });
 
   if (body.grant_type === 'refresh_token') {
     params.set('grant_type', 'refresh_token');
@@ -47,6 +49,26 @@ async function handleTokenExchange(request, env, origin) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
   });
+
+  if (!stravaResp.ok) {
+    // On failure, attach non-secret debug info (never the secret itself)
+    // so a setup problem can be diagnosed from the app's error toast alone.
+    const text = await stravaResp.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
+    parsed._debug = {
+      clientIdSet: clientId.length > 0,
+      clientIdLength: clientId.length,
+      clientIdPreview: clientId ? `${clientId.slice(0, 2)}…${clientId.slice(-2)}` : null,
+      clientSecretSet: clientSecret.length > 0,
+      clientSecretLength: clientSecret.length,
+      grantType: params.get('grant_type'),
+    };
+    return withCors(new Response(JSON.stringify(parsed), {
+      status: stravaResp.status,
+      headers: { 'Content-Type': 'application/json' },
+    }), origin);
+  }
 
   return withCors(stravaResp, origin);
 }
