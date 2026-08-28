@@ -31,6 +31,18 @@ header {
   justify-content: space-between; position: sticky; top: 0; z-index: 100;
 }
 .logo { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+.app-switch {
+  display: flex; gap: 0.4rem; padding: 0.5rem 1.25rem;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  overflow-x: auto; flex-shrink: 0;
+}
+.app-switch a {
+  color: var(--text2); text-decoration: none; font-size: 0.78rem;
+  padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid var(--border);
+  white-space: nowrap; transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.app-switch a:hover { border-color: var(--accent); color: var(--text); }
+.app-switch a.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .desk-nav { display: flex; gap: 0.25rem; }
 .desk-nav button {
   background: none; border: none; color: var(--text2); padding: 0.45rem 0.85rem;
@@ -157,6 +169,12 @@ label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 
   <div class="logo">Training Plan</div>
   <div class="desk-nav" id="deskNav"></div>
 </header>
+
+<nav class="app-switch" aria-label="Apps">
+  <a href="index.html">Breathe</a>
+  <a href="workout.html">Workout</a>
+  <a href="training-plan.html" class="active">Training Plan</a>
+</nav>
 
 <main>
   <div class="tab" id="tab-today"></div>
@@ -517,10 +535,12 @@ GYM PHILOSOPHY:
 - Every session opens with a brief warm-up and a short WEIGHTED mobility block (e.g. loaded deep squat hold, weighted Cossack squat, banded shoulder dislocates with a light plate, loaded hip flexor stretch, kettlebell halos, suitcase carry) — always include 2-4 of these with sets/duration.
 - Progressive overload: use the athlete's logged sets/reps/weight history to decide the next load and rep target. If no history exists yet for a lift, prescribe a conservative, technique-first starting point appropriate to their stated experience level, and say so in the rationale.
 - Prescribe load as an absolute weight in kg when you have history to base it on, otherwise as an RPE target.
+- Recovery affects gym prescriptions too, not just running: if recentCheckins show low whoopRecovery or high soreness heading into a session, hold or slightly reduce load/volume that session rather than pushing the planned progression, and say so in the rationale.
 
 RUNNING PHILOSOPHY:
 - Use recent Strava pace/distance/elevation and how sessions felt (RPE/checkins) to calibrate Thursday's quality session and Sunday's long run distance/pace.
-- Never make big jumps; if recovery signals (sleep, soreness, energy) have been poor, reduce volume or intensity that week and say so.
+- Never make big jumps; if recovery signals have been poor, reduce volume or intensity that week and say so.
+- Recovery signals: each check-in in recentCheckins may include whoopRecovery (Whoop's own 0-100 daily recovery score), plus subjective soreness/energy (1-5). Weight whoopRecovery heavily when present — treat a trend below ~33 as a strong signal to back off (cut volume and/or intensity that week), 34-66 as a caution (hold steady, don't push), and 67+ as a green light to progress normally. Fall back to soreness/energy alone on days without a Whoop score.
 - Tuesday is purely social/easy — do not make it harder even if fitness is improving.
 
 OUTPUT JSON SCHEMA (exact keys):
@@ -711,16 +731,16 @@ function wireSessionCard(root) {
 }
 function checkinFormHtml() {
   const today = todayStr();
-  const existing = S.get('checkins', []).find(c => c.date === today) || { sleep: 3, soreness: 3, energy: 3, notes: '' };
+  const existing = S.get('checkins', []).find(c => c.date === today) || { whoopRecovery: '', soreness: 3, energy: 3, notes: '' };
   return `
-    <div class="field"><label>Sleep quality</label><div class="slider-row"><input type="range" min="1" max="5" value="${existing.sleep}" id="ciSleep"><span class="slider-val" id="ciSleepVal">${existing.sleep}</span></div></div>
+    <div class="field"><label>Whoop Recovery %</label><input type="number" min="0" max="100" id="ciWhoopRecovery" value="${existing.whoopRecovery ?? ''}" placeholder="e.g. 72"></div>
     <div class="field"><label>Soreness</label><div class="slider-row"><input type="range" min="1" max="5" value="${existing.soreness}" id="ciSoreness"><span class="slider-val" id="ciSorenessVal">${existing.soreness}</span></div></div>
     <div class="field"><label>Energy / motivation</label><div class="slider-row"><input type="range" min="1" max="5" value="${existing.energy}" id="ciEnergy"><span class="slider-val" id="ciEnergyVal">${existing.energy}</span></div></div>
     <div class="field"><label>Notes (optional)</label><textarea id="ciNotes" rows="2">${escapeHtml(existing.notes||'')}</textarea></div>
     <button class="btn btn-primary btn-sm" id="saveCheckinBtn">Save check-in</button>`;
 }
 function wireCheckinForm() {
-  ['ciSleep','ciSoreness','ciEnergy'].forEach(id => {
+  ['ciSoreness','ciEnergy'].forEach(id => {
     const inp = document.getElementById(id); const val = document.getElementById(id + 'Val');
     if (inp) inp.addEventListener('input', () => val.textContent = inp.value);
   });
@@ -728,9 +748,10 @@ function wireCheckinForm() {
   if (btn) btn.addEventListener('click', () => {
     const today = todayStr();
     const checkins = S.get('checkins', []).filter(c => c.date !== today);
+    const recoveryVal = document.getElementById('ciWhoopRecovery').value;
     checkins.push({
       date: today,
-      sleep: +document.getElementById('ciSleep').value,
+      whoopRecovery: recoveryVal !== '' ? Math.max(0, Math.min(100, +recoveryVal)) : null,
       soreness: +document.getElementById('ciSoreness').value,
       energy: +document.getElementById('ciEnergy').value,
       notes: document.getElementById('ciNotes').value.trim(),
