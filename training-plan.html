@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training Plan</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f0f13; --surface: #1a1a24; --surface2: #252535; --border: #2e2e42;
+  --accent: #6c63ff; --accent-dim: rgba(108,99,255,0.18);
+  --text: #e8e8f0; --text2: #9090a8;
+  --success: #4ade80; --success-dim: rgba(74,222,128,0.15);
+  --danger: #f87171; --danger-dim: rgba(248,113,113,0.15);
+  --warn: #fbbf24; --run: #38bdf8; --gym: #f472b6;
+  --radius: 10px;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+  display: flex; flex-direction: column; padding-bottom: 70px;
+}
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 0 1.25rem; height: 56px; display: flex; align-items: center;
+  justify-content: space-between; position: sticky; top: 0; z-index: 100;
+}
+.logo { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+.logo a { color: inherit; text-decoration: none; }
+.desk-nav { display: flex; gap: 0.25rem; }
+.desk-nav button {
+  background: none; border: none; color: var(--text2); padding: 0.45rem 0.85rem;
+  border-radius: 8px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;
+}
+.desk-nav button:hover { background: var(--surface2); color: var(--text); }
+.desk-nav button.active { background: var(--accent); color: #fff; }
+.mob-nav {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  z-index: 100; padding: 0.4rem 0.5rem;
+}
+.mob-nav-inner { display: flex; gap: 0.25rem; }
+.mob-nav button {
+  background: none; border: none; color: var(--text2); padding: 0.45rem 0;
+  border-radius: 8px; cursor: pointer; flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 0.2rem; font-size: 0.62rem;
+}
+.mob-nav button.active { color: var(--accent); }
+.mob-nav button .ico { font-size: 1.25rem; line-height: 1; }
+@media (max-width: 720px) {
+  .desk-nav { display: none; }
+  .mob-nav { display: block; }
+}
+main { flex: 1; max-width: 760px; width: 100%; margin: 0 auto; padding: 1rem; }
+.tab { display: none; }
+.tab.active { display: block; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1rem; margin-bottom: 0.85rem;
+}
+.card h2 { font-size: 1rem; margin-bottom: 0.6rem; }
+.sec-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; gap: 0.5rem; }
+.sec-title { font-size: 0.95rem; font-weight: 700; }
+.text-sm { font-size: 0.82rem; }
+.text-xs { font-size: 0.72rem; }
+.text-muted { color: var(--text2); }
+.mt-1 { margin-top: 0.5rem; } .mt-2 { margin-top: 1rem; }
+.flex { display: flex; } .gap-1 { gap: 0.5rem; } .flex-1 { flex: 1; }
+.wrap { flex-wrap: wrap; }
+.btn {
+  border: none; border-radius: 8px; padding: 0.55rem 0.9rem; font-size: 0.85rem;
+  cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-ghost { background: var(--surface2); color: var(--text); }
+.btn-success { background: var(--success); color: #08210f; }
+.btn-danger { background: var(--danger-dim); color: var(--danger); }
+.btn-sm { padding: 0.35rem 0.6rem; font-size: 0.75rem; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+input, textarea, select {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.85rem; width: 100%;
+  font-family: inherit;
+}
+label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 0.25rem; }
+.field { margin-bottom: 0.7rem; }
+.badge {
+  font-size: 0.68rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.badge-run { background: rgba(56,189,248,0.15); color: var(--run); }
+.badge-gym { background: rgba(244,114,182,0.15); color: var(--gym); }
+.badge-rest { background: var(--surface2); color: var(--text2); }
+.badge-done { background: var(--success-dim); color: var(--success); }
+.badge-planned { background: var(--surface2); color: var(--text2); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
+.day-row {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.day-row:last-child { border-bottom: none; }
+.day-row:hover { background: var(--surface2); }
+.day-label { width: 42px; font-weight: 700; font-size: 0.8rem; }
+.day-main { flex: 1; min-width: 0; }
+.day-title { font-size: 0.85rem; font-weight: 600; }
+.day-sub { font-size: 0.72rem; color: var(--text2); }
+.empty { text-align: center; padding: 2rem 1rem; color: var(--text2); }
+.empty .ico { font-size: 2rem; margin-bottom: 0.5rem; }
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.modal-overlay[hidden] { display: none; }
+.modal {
+  background: var(--surface); border-radius: 14px 14px 0 0; width: 100%; max-width: 500px;
+  max-height: 88vh; overflow-y: auto; padding: 1.25rem;
+}
+@media (min-width: 560px) { .modal-overlay { align-items: center; } .modal { border-radius: 14px; } }
+.exercise-block { background: var(--surface2); border-radius: 8px; padding: 0.7rem; margin-bottom: 0.6rem; }
+.exercise-block .ex-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+.set-row { display: grid; grid-template-columns: 24px 1fr 1fr 28px; gap: 0.4rem; align-items: center; margin-bottom: 0.35rem; }
+.col-labels { display: grid; grid-template-columns: 24px 1fr 1fr 28px; gap: 0.4rem; font-size: 0.65rem; color: var(--text2); margin-bottom: 0.3rem; }
+.chk { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; width: 28px; height: 28px; cursor: pointer; color: var(--success); }
+.chk.done { background: var(--success-dim); border-color: var(--success); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+.tag { background: var(--surface2); border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.35rem; }
+.tag button { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 0.8rem; }
+.toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.82rem; z-index: 300;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.toast.show { opacity: 1; }
+.slider-row { display: flex; align-items: center; gap: 0.6rem; }
+.slider-row input[type=range] { flex: 1; }
+.slider-val { width: 24px; text-align: center; font-weight: 700; font-size: 0.85rem; }
+.status-pill { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.dot.ok { background: var(--success); }
+.pre { white-space: pre-wrap; font-family: inherit; font-size: 0.82rem; line-height: 1.5; color: var(--text2); }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.chart-wrap { overflow-x: auto; }
+.chart-wrap svg { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><a href="index.html">&larr;</a> &nbsp;Training Plan</div>
+  <div class="desk-nav" id="deskNav"></div>
+</header>
+
+<main>
+  <div class="tab" id="tab-today"></div>
+  <div class="tab" id="tab-week"></div>
+  <div class="tab" id="tab-log"></div>
+  <div class="tab" id="tab-trends"></div>
+  <div class="tab" id="tab-settings"></div>
+</main>
+
+<nav class="mob-nav"><div class="mob-nav-inner" id="mobNav"></div></nav>
+
+<div class="modal-overlay" id="logModal" hidden>
+  <div class="modal" id="logModalBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const WEEK_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const SESSION_DAYS = ['Mon','Tue','Thu','Fri','Sun'];
+const DAY_TYPE = { Mon:'gym', Tue:'run', Wed:'rest', Thu:'run', Fri:'gym', Sat:'rest', Sun:'run' };
+const RUN_ROLE = { Tue:'trail-bob', Thu:'quality', Sun:'long' };
+const DEFAULT_EQUIPMENT = ['Barbell + plates','Squat rack','Flat bench','Deadlift platform','Dumbbells','Pull-up bar','Kettlebells','Resistance bands'];
+const CLAUDE_MODEL = 'claude-sonnet-5';
+
+/* ============================================================
+   STORAGE
+   ============================================================ */
+const S = {
+  get(k, def) { try { const v = localStorage.getItem('tp_' + k); return v !== null ? JSON.parse(v) : def; } catch { return def; } },
+  set(k, v) { try { localStorage.setItem('tp_' + k, JSON.stringify(v)); } catch {} },
+};
+function defaultSettings() {
+  return {
+    onboarded: false,
+    stravaClientId: '', workerUrl: '',
+    stravaAccessToken: '', stravaRefreshToken: '', stravaTokenExpiresAt: 0,
+    stravaAthlete: null,
+    anthropicApiKey: '',
+    equipment: DEFAULT_EQUIPMENT.slice(),
+    bodyweightKg: '', goal: 'General fitness / no race', experienceLevel: 'Intermediate — trained on/off for a while',
+    coachNotes: '',
+  };
+}
+function getSettings() { return Object.assign(defaultSettings(), S.get('settings', {})); }
+function setSettings(s) { S.set('settings', s); }
+
+/* ============================================================
+   UTIL
+   ============================================================ */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function pad(n) { return String(n).padStart(2, '0'); }
+function toISODate(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function todayStr() { return toISODate(new Date()); }
+function parseISO(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function mondayOf(date) {
+  const d = new Date(date); const dow = d.getDay(); const diff = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diff); d.setHours(0,0,0,0); return d;
+}
+function fmtDateShort(iso) { const d = parseISO(iso); return d.toLocaleDateString(undefined, { month:'short', day:'numeric' }); }
+function fmtPaceFromSpeed(mps) {
+  if (!mps) return '—';
+  const secPerKm = 1000 / mps;
+  const m = Math.floor(secPerKm / 60), s = Math.round(secPerKm % 60);
+  return `${m}:${pad(s)}/km`;
+}
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function openModal(html) {
+  document.getElementById('logModalBody').innerHTML = html;
+  document.getElementById('logModal').hidden = false;
+}
+function closeModal() { document.getElementById('logModal').hidden = true; }
+document.getElementById('logModal').addEventListener('click', e => { if (e.target.id === 'logModal') closeModal(); });
+
+/* ============================================================
+   STRAVA
+   ============================================================ */
+function cleanRedirectUri() {
+  const u = new URL(location.href); u.search = ''; u.hash = ''; return u.toString();
+}
+function stravaConnected() { const s = getSettings(); return !!s.stravaAccessToken; }
+function connectStrava() {
+  const s = getSettings();
+  if (!s.stravaClientId || !s.workerUrl) { toast('Add your Strava Client ID and Worker URL in Settings first'); return; }
+  const redirect = encodeURIComponent(cleanRedirectUri());
+  const url = `https://www.strava.com/oauth/authorize?client_id=${encodeURIComponent(s.stravaClientId)}&response_type=code&redirect_uri=${redirect}&approval_prompt=auto&scope=read,activity:read_all`;
+  location.href = url;
+}
+function disconnectStrava() {
+  const s = getSettings();
+  s.stravaAccessToken = ''; s.stravaRefreshToken = ''; s.stravaTokenExpiresAt = 0; s.stravaAthlete = null;
+  setSettings(s); renderSettings();
+}
+async function handleOAuthRedirect() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (!code) return;
+  history.replaceState({}, '', cleanRedirectUri());
+  const s = getSettings();
+  if (!s.workerUrl) { toast('Strava code received, but Worker URL is not set'); return; }
+  try {
+    const resp = await fetch(s.workerUrl.replace(/\/$/, '') + '/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'authorization_code', code }),
+    });
+    if (!resp.ok) throw new Error('Token exchange failed: ' + resp.status);
+    const data = await resp.json();
+    applyStravaTokens(data);
+    toast('Strava connected ✓');
+  } catch (err) {
+    toast('Strava connect failed: ' + err.message);
+  }
+}
+function applyStravaTokens(data) {
+  const s = getSettings();
+  s.stravaAccessToken = data.access_token;
+  s.stravaRefreshToken = data.refresh_token || s.stravaRefreshToken;
+  s.stravaTokenExpiresAt = data.expires_at || 0;
+  if (data.athlete) s.stravaAthlete = { id: data.athlete.id, firstname: data.athlete.firstname };
+  setSettings(s);
+}
+async function ensureStravaToken() {
+  const s = getSettings();
+  if (!s.stravaAccessToken) throw new Error('Strava not connected');
+  const now = Math.floor(Date.now() / 1000);
+  if (s.stravaTokenExpiresAt - now > 120) return s.stravaAccessToken;
+  const resp = await fetch(s.workerUrl.replace(/\/$/, '') + '/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: s.stravaRefreshToken }),
+  });
+  if (!resp.ok) throw new Error('Strava token refresh failed');
+  const data = await resp.json();
+  applyStravaTokens(data);
+  return data.access_token;
+}
+async function fetchStravaActivities(afterEpoch) {
+  const s = getSettings();
+  const token = await ensureStravaToken();
+  const url = `${s.workerUrl.replace(/\/$/, '')}/api/athlete/activities?after=${afterEpoch}&per_page=100`;
+  const resp = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!resp.ok) throw new Error('Strava fetch failed: ' + resp.status);
+  return resp.json();
+}
+async function syncStrava(silent) {
+  if (!stravaConnected()) { if (!silent) toast('Connect Strava first'); return; }
+  try {
+    const afterEpoch = Math.floor(Date.now() / 1000) - 90 * 86400;
+    const activities = await fetchStravaActivities(afterEpoch);
+    const cache = S.get('stravaCache', []);
+    const byId = new Map(cache.map(a => [a.id, a]));
+    for (const a of activities) {
+      if (!['Run','TrailRun','Walk','Hike'].includes(a.sport_type)) continue;
+      byId.set(a.id, {
+        id: a.id, name: a.name, sport_type: a.sport_type, start_local: a.start_date_local,
+        date: a.start_date_local.slice(0,10), distance: a.distance, moving_time: a.moving_time,
+        elevation_gain: a.total_elevation_gain, avg_speed: a.average_speed,
+        avg_hr: a.average_heartrate || null,
+      });
+    }
+    const merged = Array.from(byId.values()).sort((x,y) => y.date.localeCompare(x.date));
+    S.set('stravaCache', merged);
+    matchStravaToWeeks();
+    if (!silent) toast(`Synced ${activities.length} activities from Strava`);
+    renderAll();
+  } catch (err) {
+    if (!silent) toast('Strava sync error: ' + err.message);
+  }
+}
+function matchStravaToWeeks() {
+  const cache = S.get('stravaCache', []);
+  const weeks = S.get('weeks', []);
+  for (const w of weeks) {
+    for (const sess of w.sessions) {
+      if (sess.type !== 'run') continue;
+      const dayIdx = WEEK_DAYS.indexOf(sess.day);
+      const d = new Date(parseISO(w.weekStart)); d.setDate(d.getDate() + dayIdx);
+      const iso = toISODate(d);
+      const match = cache.find(a => a.date === iso && !a.claimed);
+      if (match && sess.status !== 'done') {
+        sess.status = 'done'; sess.stravaId = match.id;
+      }
+    }
+  }
+  S.set('weeks', weeks);
+}
+
+/* ============================================================
+   CLAUDE
+   ============================================================ */
+async function callClaude({ system, content, maxTokens }) {
+  const s = getSettings();
+  if (!s.anthropicApiKey) throw new Error('Add your Anthropic API key in Settings first');
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': s.anthropicApiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens || 2000,
+      system,
+      messages: [{ role: 'user', content }],
+    }),
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    throw new Error(`Claude API error ${resp.status}: ${errText.slice(0,200)}`);
+  }
+  const data = await resp.json();
+  return data.content.map(c => c.text || '').join('');
+}
+function extractJson(text) {
+  let t = text.trim();
+  t = t.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const start = t.indexOf('{'); const end = t.lastIndexOf('}');
+  if (start === -1 || end === -1) throw new Error('No JSON object found in response');
+  return JSON.parse(t.slice(start, end + 1));
+}
+
+const COACH_SYSTEM_PROMPT = `You are an experienced strength & conditioning coach and running coach, writing one week of training for a single athlete you know well. Reply with ONLY a single valid JSON object — no markdown fences, no commentary before or after.
+
+FIXED WEEKLY STRUCTURE (never change these days or the type of session):
+- Mon: Gym (powerlifting-focused, ~60 minutes including warm-up and weighted mobility)
+- Tue: Easy trail run, always with a friend named Bob, always around 5km, effort-based not pace-based (it's stop-start, up and down, social — never prescribe a target pace for this day, just an effort description like "conversational, easy")
+- Wed: Rest
+- Thu: Quality run (intervals, tempo, hills, or fartlek — vary week to week based on recent training)
+- Fri: Gym (powerlifting-focused, ~60 minutes including warm-up and weighted mobility)
+- Sat: Rest
+- Sun: Long run, progressive distance building sensibly over the coming months (respect the ~10% rule week over week, and include an easier "step-back" week roughly every 4th week)
+
+GYM PHILOSOPHY:
+- Powerlifting focus on the big three (squat, bench press, deadlift) plus an overhead/incline press, using only the athlete's available equipment (given in context).
+- Split the two sessions so squat/bench appear in one and deadlift/press in the other (rotate emphasis week to week).
+- Every session opens with a brief warm-up and a short WEIGHTED mobility block (e.g. loaded deep squat hold, weighted Cossack squat, banded shoulder dislocates with a light plate, loaded hip flexor stretch, kettlebell halos, suitcase carry) — always include 2-4 of these with sets/duration.
+- Progressive overload: use the athlete's logged sets/reps/weight history to decide the next load and rep target. If no history exists yet for a lift, prescribe a conservative, technique-first starting point appropriate to their stated experience level, and say so in the rationale.
+- Prescribe load as an absolute weight in kg when you have history to base it on, otherwise as an RPE target.
+
+RUNNING PHILOSOPHY:
+- Use recent Strava pace/distance/elevation and how sessions felt (RPE/checkins) to calibrate Thursday's quality session and Sunday's long run distance/pace.
+- Never make big jumps; if recovery signals (sleep, soreness, energy) have been poor, reduce volume or intensity that week and say so.
+- Tuesday is purely social/easy — do not make it harder even if fitness is improving.
+
+OUTPUT JSON SCHEMA (exact keys):
+{
+  "weekStart": "YYYY-MM-DD",
+  "rationale": "2-4 sentence coach note: what changed this week and why, referencing their recent data",
+  "sessions": [
+    {
+      "day": "Mon", "type": "gym", "title": "short session name",
+      "targetDurationMin": 60,
+      "warmup": "short text",
+      "mobility": [ { "name": "string", "detail": "string" } ],
+      "exercises": [ { "name": "string", "sets": 3, "reps": "5" or "5-8", "load": "e.g. 80kg or RPE 7", "notes": "optional" } ],
+      "cooldown": "short text"
+    },
+    { "day": "Tue", "type": "run", "role": "trail-bob", "title": "Easy trail with Bob", "targetKm": 5, "effort": "easy, conversational", "notes": "string" },
+    { "day": "Thu", "type": "run", "role": "quality", "title": "short name", "targetKm": 0, "structure": "e.g. 6 x 3min @ threshold effort, 2min jog recovery", "notes": "string" },
+    { "day": "Fri", "type": "gym", ... same shape as Mon ... },
+    { "day": "Sun", "type": "run", "role": "long", "title": "Long run", "targetKm": 0, "targetPace": "e.g. 6:00-6:20/km easy", "notes": "string" }
+  ]
+}
+Sessions must be in this exact order and cover exactly these five days.`;
+
+async function generatePlan(extraNote) {
+  const s = getSettings();
+  const weeks = S.get('weeks', []);
+  const lastWeek = weeks[weeks.length - 1];
+  const nextMonday = lastWeek ? new Date(parseISO(lastWeek.weekStart).getTime() + 7*86400000) : mondayOf(new Date());
+  const weekStartIso = toISODate(mondayOf(nextMonday));
+
+  const cache = S.get('stravaCache', []);
+  const cutoff = toISODate(new Date(Date.now() - 56*86400000));
+  const recentRuns = cache.filter(a => a.date >= cutoff).map(a => ({
+    date: a.date, type: a.sport_type, km: +(a.distance/1000).toFixed(2),
+    pace: fmtPaceFromSpeed(a.avg_speed), elevGain: Math.round(a.elevation_gain||0),
+    movingMin: Math.round(a.moving_time/60), avgHr: a.avg_hr,
+  }));
+  const gymLogs = S.get('gymLogs', []).filter(g => g.date >= cutoff).map(g => ({
+    date: g.date, exercises: g.exercises.map(e => ({ name: e.name, sets: e.sets })), rpe: g.rpe, soreness: g.soreness,
+  }));
+  const checkins = S.get('checkins', []).filter(c => c.date >= cutoff);
+  const lastWeekSummary = lastWeek ? {
+    weekStart: lastWeek.weekStart,
+    sessions: lastWeek.sessions.map(x => ({ day: x.day, type: x.type, title: x.title, status: x.status })),
+  } : null;
+
+  const context = {
+    weekStartToGenerate: weekStartIso,
+    athlete: {
+      bodyweightKg: s.bodyweightKg || null, goal: s.goal, experienceLevel: s.experienceLevel,
+      equipment: s.equipment, coachNotes: s.coachNotes || null,
+    },
+    recentRuns, recentGymSessions: gymLogs, recentCheckins: checkins, previousWeek: lastWeekSummary,
+    adjustmentRequest: extraNote || null,
+  };
+
+  const text = await callClaude({
+    system: COACH_SYSTEM_PROMPT,
+    content: [{ type: 'text', text: 'Athlete context (JSON):\n' + JSON.stringify(context, null, 2) + '\n\nGenerate the plan JSON now.' }],
+    maxTokens: 3000,
+  });
+  const plan = extractJson(text);
+  plan.id = uid(); plan.createdAt = new Date().toISOString();
+  for (const sess of plan.sessions) if (!sess.status) sess.status = 'planned';
+  const idx = weeks.findIndex(w => w.weekStart === plan.weekStart);
+  if (idx >= 0) weeks[idx] = plan; else weeks.push(plan);
+  weeks.sort((a,b) => a.weekStart.localeCompare(b.weekStart));
+  S.set('weeks', weeks);
+  matchStravaToWeeks();
+  return plan;
+}
+
+const GYM_ANALYZE_SYSTEM = `You extract a gym workout log from a photo (whiteboard, notebook, phone notes screenshot) or free text jotted by the athlete. Reply with ONLY valid JSON, no markdown fences: {"exercises":[{"name":"string","sets":[{"reps":number,"weight":number}]}],"notes":"string, empty if none","rpe":number or null,"soreness":number or null}. Weight is in kilograms (convert from lbs if the source clearly uses lbs). If reps/weight vary per set, list each set separately. If you cannot read something, make a reasonable best guess rather than omitting it.`;
+
+async function analyzeGymInput({ imageBase64, imageMediaType, text }) {
+  const content = [];
+  if (imageBase64) content.push({ type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageBase64 } });
+  content.push({ type: 'text', text: text ? `Notes: ${text}` : 'Extract the workout from this image.' });
+  const responseText = await callClaude({ system: GYM_ANALYZE_SYSTEM, content, maxTokens: 1500 });
+  return extractJson(responseText);
+}
+
+/* ============================================================
+   NAV / RENDER SHELL
+   ============================================================ */
+const TABS = [
+  { id: 'today', label: 'Today', ico: '\u{1F4C5}' },
+  { id: 'week', label: 'Week', ico: '\u{1F4CB}' },
+  { id: 'log', label: 'Log', ico: '✍️' },
+  { id: 'trends', label: 'Trends', ico: '\u{1F4C8}' },
+  { id: 'settings', label: 'Settings', ico: '⚙️' },
+];
+let activeTab = 'today';
+function buildNav() {
+  document.getElementById('deskNav').innerHTML = TABS.map(t =>
+    `<button data-tab="${t.id}" class="${t.id===activeTab?'active':''}">${t.ico} ${t.label}</button>`).join('');
+  document.getElementById('mobNav').innerHTML = TABS.map(t =>
+    `<button data-tab="${t.id}" class="${t.id===activeTab?'active':''}"><span class="ico">${t.ico}</span>${t.label}</button>`).join('');
+  document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+}
+function switchTab(id) {
+  activeTab = id;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + id));
+  buildNav();
+  renderAll();
+}
+function renderAll() {
+  const s = getSettings();
+  if (activeTab === 'today') renderToday(s);
+  if (activeTab === 'week') renderWeek(s);
+  if (activeTab === 'log') renderLog(s);
+  if (activeTab === 'trends') renderTrends(s);
+  if (activeTab === 'settings') renderSettings(s);
+}
+
+/* ============================================================
+   TODAY TAB
+   ============================================================ */
+function currentWeekFor(dateIso) {
+  const weeks = S.get('weeks', []);
+  const monday = toISODate(mondayOf(parseISO(dateIso)));
+  return weeks.find(w => w.weekStart === monday);
+}
+function renderToday(s) {
+  const el = document.getElementById('tab-today');
+  const today = todayStr();
+  const dow = WEEK_DAYS[(parseISO(today).getDay() + 6) % 7];
+  const week = currentWeekFor(today);
+
+  if (!s.onboarded) {
+    el.innerHTML = `<div class="card"><h2>Welcome \u{1F44B}</h2>
+      <p class="text-sm text-muted">This app builds your weekly gym + running plan from your Strava data and training log, using Claude to write and adjust it. Head to <b>Settings</b> to connect Strava and add your Claude API key — it only takes a few minutes and there are step-by-step instructions in TRAINING_PLAN_SETUP.md.</p>
+      <button class="btn btn-primary mt-2" onclick="switchTab('settings')">Go to Settings</button></div>`;
+    return;
+  }
+  if (!week) {
+    el.innerHTML = `<div class="card empty"><div class="ico">\u{1F3CB}</div><div>No plan for this week yet</div>
+      <p class="text-xs mt-1">Generate one from your recent training data</p>
+      <button class="btn btn-primary mt-2" id="genFirstPlan">Generate This Week's Plan</button></div>`;
+    document.getElementById('genFirstPlan').addEventListener('click', () => runGeneratePlan());
+    return;
+  }
+  const sess = week.sessions.find(x => x.day === dow);
+  el.innerHTML = `
+    <div class="card">
+      <div class="sec-hdr"><span class="sec-title">${today} — ${dow}</span>
+        <button class="btn btn-ghost btn-sm" onclick="syncStrava(false)">\u{1F504} Sync Strava</button></div>
+      ${sess ? sessionCardHtml(sess, week) : `<p class="text-sm text-muted">Rest day. Recovery is training too.</p>`}
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><span class="sec-title">How are you feeling?</span></div>
+      ${checkinFormHtml()}
+    </div>`;
+  wireCheckinForm();
+  wireSessionCard(el);
+}
+function sessionCardHtml(sess, week) {
+  const badge = sess.type === 'gym' ? '<span class="badge badge-gym">Gym</span>' : '<span class="badge badge-run">Run</span>';
+  const statusBadge = sess.status === 'done' ? '<span class="badge badge-done">Done</span>' : '<span class="badge badge-planned">Planned</span>';
+  let body = '';
+  if (sess.type === 'gym') {
+    body = `
+      <p class="text-sm mt-1"><b>Warm-up:</b> ${escapeHtml(sess.warmup||'')}</p>
+      <p class="text-sm mt-1"><b>Weighted mobility:</b></p>
+      <ul class="text-sm text-muted">${(sess.mobility||[]).map(m => `<li>${escapeHtml(m.name)} — ${escapeHtml(m.detail||'')}</li>`).join('')}</ul>
+      <p class="text-sm mt-1"><b>Lifts:</b></p>
+      <ul class="text-sm text-muted">${(sess.exercises||[]).map(e => `<li>${escapeHtml(e.name)}: ${e.sets}x${escapeHtml(String(e.reps))} @ ${escapeHtml(e.load||'')}${e.notes ? ' — ' + escapeHtml(e.notes) : ''}</li>`).join('')}</ul>`;
+  } else {
+    body = `<p class="text-sm mt-1">${escapeHtml(sess.title||'')}</p>
+      <p class="text-sm text-muted">${sess.targetKm ? sess.targetKm + 'km · ' : ''}${escapeHtml(sess.structure || sess.effort || sess.targetPace || '')}</p>
+      ${sess.notes ? `<p class="text-sm text-muted mt-1">${escapeHtml(sess.notes)}</p>` : ''}`;
+  }
+  return `<div class="flex gap-1 wrap" style="align-items:center;margin-bottom:.4rem">${badge}${statusBadge}</div>
+    <div class="text-sm" style="font-weight:700">${escapeHtml(sess.title||'')}</div>
+    ${body}
+    <div class="flex gap-1 mt-2">
+      ${sess.type === 'gym' ? `<button class="btn btn-primary btn-sm log-gym-btn" data-day="${sess.day}">Log this session</button>` : ''}
+      ${sess.status !== 'done' ? `<button class="btn btn-ghost btn-sm mark-done-btn" data-day="${sess.day}">Mark done</button>` : ''}
+    </div>`;
+}
+function wireSessionCard(root) {
+  root.querySelectorAll('.log-gym-btn').forEach(b => b.addEventListener('click', () => openGymLogModal(b.dataset.day)));
+  root.querySelectorAll('.mark-done-btn').forEach(b => b.addEventListener('click', () => {
+    const week = currentWeekFor(todayStr()); const sess = week.sessions.find(x => x.day === b.dataset.day);
+    sess.status = 'done'; const weeks = S.get('weeks', []); S.set('weeks', weeks.map(w => w.id === week.id ? week : w));
+    toast('Marked done'); renderAll();
+  }));
+}
+function checkinFormHtml() {
+  const today = todayStr();
+  const existing = S.get('checkins', []).find(c => c.date === today) || { sleep: 3, soreness: 3, energy: 3, notes: '' };
+  return `
+    <div class="field"><label>Sleep quality</label><div class="slider-row"><input type="range" min="1" max="5" value="${existing.sleep}" id="ciSleep"><span class="slider-val" id="ciSleepVal">${existing.sleep}</span></div></div>
+    <div class="field"><label>Soreness</label><div class="slider-row"><input type="range" min="1" max="5" value="${existing.soreness}" id="ciSoreness"><span class="slider-val" id="ciSorenessVal">${existing.soreness}</span></div></div>
+    <div class="field"><label>Energy / motivation</label><div class="slider-row"><input type="range" min="1" max="5" value="${existing.energy}" id="ciEnergy"><span class="slider-val" id="ciEnergyVal">${existing.energy}</span></div></div>
+    <div class="field"><label>Notes (optional)</label><textarea id="ciNotes" rows="2">${escapeHtml(existing.notes||'')}</textarea></div>
+    <button class="btn btn-primary btn-sm" id="saveCheckinBtn">Save check-in</button>`;
+}
+function wireCheckinForm() {
+  ['ciSleep','ciSoreness','ciEnergy'].forEach(id => {
+    const inp = document.getElementById(id); const val = document.getElementById(id + 'Val');
+    if (inp) inp.addEventListener('input', () => val.textContent = inp.value);
+  });
+  const btn = document.getElementById('saveCheckinBtn');
+  if (btn) btn.addEventListener('click', () => {
+    const today = todayStr();
+    const checkins = S.get('checkins', []).filter(c => c.date !== today);
+    checkins.push({
+      date: today,
+      sleep: +document.getElementById('ciSleep').value,
+      soreness: +document.getElementById('ciSoreness').value,
+      energy: +document.getElementById('ciEnergy').value,
+      notes: document.getElementById('ciNotes').value.trim(),
+    });
+    S.set('checkins', checkins); toast('Check-in saved');
+  });
+}
+
+/* ============================================================
+   WEEK TAB
+   ============================================================ */
+function renderWeek(s) {
+  const el = document.getElementById('tab-week');
+  const weeks = S.get('weeks', []);
+  const week = weeks[weeks.length - 1];
+  if (!week) {
+    el.innerHTML = `<div class="card empty"><div class="ico">\u{1F4CB}</div><div>No plan yet</div>
+      <button class="btn btn-primary mt-2" id="genPlanBtn2">Generate This Week's Plan</button></div>`;
+    document.getElementById('genPlanBtn2').addEventListener('click', () => runGeneratePlan());
+    return;
+  }
+  const rows = WEEK_DAYS.map(day => {
+    const sess = week.sessions.find(x => x.day === day);
+    if (!sess) return `<div class="day-row"><span class="day-label">${day}</span><div class="day-main"><div class="day-title text-muted">Rest</div></div><span class="badge badge-rest">Rest</span></div>`;
+    const badge = sess.type === 'gym' ? '<span class="badge badge-gym">Gym</span>' : '<span class="badge badge-run">Run</span>';
+    const status = sess.status === 'done' ? '<span class="badge badge-done">✓</span>' : '';
+    const sub = sess.type === 'gym' ? (sess.exercises||[]).map(e=>e.name).join(', ') : (sess.targetKm ? sess.targetKm+'km' : '') + (sess.structure ? ' · ' + sess.structure : '');
+    return `<div class="day-row" data-day="${day}"><span class="day-label">${day}</span>
+      <div class="day-main"><div class="day-title">${escapeHtml(sess.title||'')}</div><div class="day-sub">${escapeHtml(sub)}</div></div>
+      <div class="flex gap-1" style="align-items:center">${badge}${status}</div></div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="card">
+      <div class="sec-hdr"><span class="sec-title">Week of ${fmtDateShort(week.weekStart)}</span>
+        <button class="btn btn-ghost btn-sm" id="regenBtn">\u{1F504} Regenerate</button></div>
+      ${rows}
+    </div>
+    <div class="card"><div class="sec-title mt-1">Coach note</div><p class="pre">${escapeHtml(week.rationale||'')}</p></div>`;
+  document.getElementById('regenBtn').addEventListener('click', () => {
+    const note = prompt('Anything to factor in for this week (optional)? e.g. sore knee, travelling, short on time');
+    runGeneratePlan(note || undefined);
+  });
+  el.querySelectorAll('.day-row[data-day]').forEach(r => r.addEventListener('click', () => {
+    const sess = week.sessions.find(x => x.day === r.dataset.day);
+    openDayDetailModal(sess, week);
+  }));
+}
+function openDayDetailModal(sess, week) {
+  openModal(`
+    <div class="sec-hdr"><span class="sec-title">${sess.day} — ${escapeHtml(sess.title||'')}</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button></div>
+    ${sessionCardHtml(sess, week)}`);
+  wireSessionCard(document.getElementById('logModalBody'));
+  document.getElementById('logModalBody').querySelectorAll('.log-gym-btn, .mark-done-btn').forEach(b =>
+    b.addEventListener('click', () => setTimeout(closeModal, 50)));
+}
+async function runGeneratePlan(note) {
+  const s = getSettings();
+  if (!s.anthropicApiKey) { toast('Add your Anthropic API key in Settings first'); switchTab('settings'); return; }
+  toast('Generating plan…');
+  try {
+    await generatePlan(note);
+    toast('New plan ready \u{1F4AA}');
+    switchTab('week');
+  } catch (err) {
+    toast('Plan generation failed: ' + err.message);
+  }
+}
+
+/* ============================================================
+   LOG TAB
+   ============================================================ */
+function renderLog(s) {
+  const el = document.getElementById('tab-log');
+  const gymLogs = S.get('gymLogs', []).slice().reverse();
+  const runs = S.get('stravaCache', []).slice(0, 15);
+  el.innerHTML = `
+    <div class="card">
+      <div class="sec-hdr"><span class="sec-title">Log a gym session</span></div>
+      <div class="flex gap-1 wrap">
+        <button class="btn btn-primary btn-sm" id="logManualBtn">✍️ Manual entry</button>
+        <button class="btn btn-ghost btn-sm" id="logPhotoBtn">\u{1F4F7} From photo</button>
+        <button class="btn btn-ghost btn-sm" id="logTextBtn">\u{1F4AC} From text jot</button>
+      </div>
+      <input type="file" id="photoInput" accept="image/*" hidden>
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><span class="sec-title">Recent gym logs</span></div>
+      ${gymLogs.length ? gymLogs.slice(0,8).map(g => `
+        <div class="day-row"><span class="day-label">${fmtDateShort(g.date)}</span>
+          <div class="day-main"><div class="day-title">${g.exercises.map(e=>e.name).join(', ')}</div>
+          <div class="day-sub">RPE ${g.rpe ?? '—'} · ${g.source}</div></div></div>`).join('') :
+        `<p class="text-sm text-muted">No gym sessions logged yet.</p>`}
+    </div>
+    <div class="card">
+      <div class="sec-hdr"><span class="sec-title">Recent Strava runs</span>
+        <button class="btn btn-ghost btn-sm" onclick="syncStrava(false)">\u{1F504} Sync</button></div>
+      ${runs.length ? runs.map(r => `
+        <div class="day-row"><span class="day-label">${fmtDateShort(r.date)}</span>
+          <div class="day-main"><div class="day-title">${escapeHtml(r.name)}</div>
+          <div class="day-sub">${(r.distance/1000).toFixed(1)}km · ${fmtPaceFromSpeed(r.avg_speed)}${r.elevation_gain ? ' · ' + Math.round(r.elevation_gain) + 'm elev' : ''}</div></div></div>`).join('') :
+        `<p class="text-sm text-muted">${stravaConnected() ? 'No runs synced yet — tap Sync.' : 'Connect Strava in Settings.'}</p>`}
+    </div>`;
+  document.getElementById('logManualBtn').addEventListener('click', () => openGymLogModal(currentDayLabel()));
+  document.getElementById('logPhotoBtn').addEventListener('click', () => document.getElementById('photoInput').click());
+  document.getElementById('logTextBtn').addEventListener('click', () => openTextJotModal());
+  document.getElementById('photoInput').addEventListener('change', handlePhotoUpload);
+}
+function currentDayLabel() { return WEEK_DAYS[(parseISO(todayStr()).getDay() + 6) % 7]; }
+
+function openTextJotModal() {
+  openModal(`
+    <div class="sec-hdr"><span class="sec-title">Describe your session</span><button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button></div>
+    <div class="field"><textarea id="jotText" rows="5" placeholder="e.g. Squat 5x5 @ 90kg felt good, bench 4x6 @ 62.5kg, plank 3x45s. RPE 7"></textarea></div>
+    <button class="btn btn-primary" id="jotAnalyzeBtn">Analyze with Claude</button>
+    <div id="jotStatus" class="text-sm text-muted mt-1"></div>`);
+  document.getElementById('jotAnalyzeBtn').addEventListener('click', async () => {
+    const text = document.getElementById('jotText').value.trim();
+    if (!text) return;
+    document.getElementById('jotStatus').innerHTML = '<span class="spinner"></span> Analyzing…';
+    try {
+      const parsed = await analyzeGymInput({ text });
+      openGymLogModal(currentDayLabel(), parsed, 'text');
+    } catch (err) {
+      document.getElementById('jotStatus').textContent = 'Error: ' + err.message;
+    }
+  });
+}
+function handlePhotoUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const base64 = reader.result.split(',')[1];
+    openModal(`<div class="sec-hdr"><span class="sec-title">Analyzing photo…</span></div><div class="text-sm text-muted"><span class="spinner"></span> Reading your workout with Claude</div>`);
+    try {
+      const parsed = await analyzeGymInput({ imageBase64: base64, imageMediaType: file.type || 'image/jpeg' });
+      openGymLogModal(currentDayLabel(), parsed, 'photo');
+    } catch (err) {
+      openModal(`<div class="sec-hdr"><span class="sec-title">Couldn't read that photo</span><button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button></div><p class="text-sm text-muted">${escapeHtml(err.message)}</p>`);
+    }
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function openGymLogModal(day, prefill, source) {
+  const data = prefill || { exercises: [{ name: '', sets: [{ reps: 5, weight: 0 }] }], notes: '', rpe: 6, soreness: 2 };
+  window._gymLogDraft = JSON.parse(JSON.stringify(data));
+  window._gymLogDay = day; window._gymLogSource = source || 'manual';
+  renderGymLogModal();
+}
+function renderGymLogModal() {
+  const d = window._gymLogDraft;
+  openModal(`
+    <div class="sec-hdr"><span class="sec-title">Log — ${window._gymLogDay}</span><button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button></div>
+    <div id="exList">${d.exercises.map((ex, ei) => exerciseBlockHtml(ex, ei)).join('')}</div>
+    <button class="btn btn-ghost btn-sm mt-1" id="addExBtn">+ Exercise</button>
+    <div class="field mt-2"><label>RPE (1-10)</label><input type="number" id="glRpe" min="1" max="10" value="${d.rpe ?? ''}"></div>
+    <div class="field"><label>Soreness (1-5)</label><input type="number" id="glSoreness" min="1" max="5" value="${d.soreness ?? ''}"></div>
+    <div class="field"><label>Notes</label><textarea id="glNotes" rows="2">${escapeHtml(d.notes||'')}</textarea></div>
+    <button class="btn btn-success" id="saveGymLogBtn" style="width:100%">✅ Save session</button>`);
+  wireGymLogModal();
+}
+function exerciseBlockHtml(ex, ei) {
+  return `<div class="exercise-block" data-ei="${ei}">
+    <div class="ex-hdr">
+      <input type="text" class="ex-name" data-ei="${ei}" value="${escapeHtml(ex.name)}" placeholder="Exercise name" style="flex:1;margin-right:.4rem">
+      <button class="chk" data-remove-ex="${ei}">✕</button>
+    </div>
+    <div class="col-labels"><span>#</span><span>Reps</span><span>Weight (kg)</span><span></span></div>
+    ${ex.sets.map((set, si) => `
+      <div class="set-row">
+        <span class="text-xs text-muted">${si+1}</span>
+        <input type="number" class="set-reps" data-ei="${ei}" data-si="${si}" value="${set.reps}" min="0">
+        <input type="number" class="set-weight" data-ei="${ei}" data-si="${si}" value="${set.weight}" min="0" step="2.5">
+        <button class="chk" data-remove-set="${ei}:${si}">✕</button>
+      </div>`).join('')}
+    <button class="btn btn-ghost btn-sm" data-add-set="${ei}">+ Set</button>
+  </div>`;
+}
+function wireGymLogModal() {
+  const root = document.getElementById('logModalBody');
+  root.querySelectorAll('.ex-name').forEach(i => i.addEventListener('input', () => { window._gymLogDraft.exercises[+i.dataset.ei].name = i.value; }));
+  root.querySelectorAll('.set-reps').forEach(i => i.addEventListener('input', () => { window._gymLogDraft.exercises[+i.dataset.ei].sets[+i.dataset.si].reps = +i.value || 0; }));
+  root.querySelectorAll('.set-weight').forEach(i => i.addEventListener('input', () => { window._gymLogDraft.exercises[+i.dataset.ei].sets[+i.dataset.si].weight = +i.value || 0; }));
+  root.querySelectorAll('[data-add-set]').forEach(b => b.addEventListener('click', () => {
+    const ei = +b.dataset.addSet; const sets = window._gymLogDraft.exercises[ei].sets;
+    const last = sets[sets.length-1] || { reps: 5, weight: 0 };
+    sets.push({ reps: last.reps, weight: last.weight }); renderGymLogModal();
+  }));
+  root.querySelectorAll('[data-remove-set]').forEach(b => b.addEventListener('click', () => {
+    const [ei, si] = b.dataset.removeSet.split(':').map(Number);
+    window._gymLogDraft.exercises[ei].sets.splice(si, 1); renderGymLogModal();
+  }));
+  root.querySelectorAll('[data-remove-ex]').forEach(b => b.addEventListener('click', () => {
+    window._gymLogDraft.exercises.splice(+b.dataset.removeEx, 1); renderGymLogModal();
+  }));
+  document.getElementById('addExBtn').addEventListener('click', () => {
+    window._gymLogDraft.exercises.push({ name: '', sets: [{ reps: 5, weight: 0 }] }); renderGymLogModal();
+  });
+  document.getElementById('saveGymLogBtn').addEventListener('click', () => {
+    const d = window._gymLogDraft;
+    d.rpe = +document.getElementById('glRpe').value || null;
+    d.soreness = +document.getElementById('glSoreness').value || null;
+    d.notes = document.getElementById('glNotes').value.trim();
+    d.exercises = d.exercises.filter(e => e.name.trim());
+    const logs = S.get('gymLogs', []);
+    logs.push({ id: uid(), date: todayStr(), day: window._gymLogDay, exercises: d.exercises, rpe: d.rpe, soreness: d.soreness, notes: d.notes, source: window._gymLogSource });
+    S.set('gymLogs', logs);
+    const week = currentWeekFor(todayStr());
+    if (week) {
+      const sess = week.sessions.find(x => x.day === window._gymLogDay);
+      if (sess) { sess.status = 'done'; const weeks = S.get('weeks', []); S.set('weeks', weeks.map(w => w.id === week.id ? week : w)); }
+    }
+    closeModal(); toast('Session saved'); renderAll();
+  });
+}
+
+/* ============================================================
+   TRENDS TAB
+   ============================================================ */
+function svgLineChart(points, opts) {
+  const w = Math.max(320, points.length * 42), h = 140, pad = 24;
+  if (!points.length) return `<p class="text-sm text-muted">Not enough data yet.</p>`;
+  const vals = points.map(p => p.v);
+  const min = Math.min(...vals, 0), max = Math.max(...vals, 1);
+  const x = i => pad + (i * (w - pad*2) / Math.max(1, points.length - 1));
+  const y = v => h - pad - ((v - min) / (max - min || 1)) * (h - pad*2);
+  const path = points.map((p,i) => `${i===0?'M':'L'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
+  const dots = points.map((p,i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="3" fill="var(--accent)"></circle>`).join('');
+  const labels = points.map((p,i) => `<text x="${x(i).toFixed(1)}" y="${h-4}" font-size="9" fill="var(--text2)" text-anchor="middle">${escapeHtml(p.label)}</text>`).join('');
+  return `<div class="chart-wrap"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2"></path>${dots}${labels}
+  </svg></div>`;
+}
+function svgBarChart(points) {
+  const w = Math.max(320, points.length * 42), h = 140, pad = 24;
+  if (!points.length) return `<p class="text-sm text-muted">Not enough data yet.</p>`;
+  const max = Math.max(...points.map(p => p.v), 1);
+  const bw = (w - pad*2) / points.length * 0.6;
+  const bars = points.map((p,i) => {
+    const bh = (p.v / max) * (h - pad*2);
+    const bx = pad + i * ((w - pad*2) / points.length) + ((w - pad*2)/points.length - bw)/2;
+    return `<rect x="${bx.toFixed(1)}" y="${(h-pad-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="var(--run)" rx="2"></rect>
+      <text x="${(bx+bw/2).toFixed(1)}" y="${h-4}" font-size="9" fill="var(--text2)" text-anchor="middle">${escapeHtml(p.label)}</text>`;
+  }).join('');
+  return `<div class="chart-wrap"><svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${bars}</svg></div>`;
+}
+function weekKey(dateIso) { return toISODate(mondayOf(parseISO(dateIso))); }
+function renderTrends(s) {
+  const el = document.getElementById('tab-trends');
+  const cache = S.get('stravaCache', []);
+  const byWeek = new Map();
+  for (const a of cache) {
+    const wk = weekKey(a.date); byWeek.set(wk, (byWeek.get(wk)||0) + a.distance/1000);
+  }
+  const weeksSorted = Array.from(byWeek.keys()).sort().slice(-10);
+  const mileagePoints = weeksSorted.map(wk => ({ label: fmtDateShort(wk), v: +byWeek.get(wk).toFixed(1) }));
+
+  const longRuns = cache.filter(a => WEEK_DAYS[(parseISO(a.date).getDay()+6)%7] === 'Sun').slice(0,10).reverse();
+  const paceLong = longRuns.map(a => ({ label: fmtDateShort(a.date), v: +(1000/a.avg_speed/60).toFixed(2) }));
+
+  const gymLogs = S.get('gymLogs', []);
+  function e1rmSeries(name) {
+    return gymLogs.filter(g => g.exercises.some(e => e.name.toLowerCase().includes(name)))
+      .map(g => {
+        const ex = g.exercises.find(e => e.name.toLowerCase().includes(name));
+        const top = ex.sets.reduce((m,s) => s.weight * (1 + s.reps/30) > m ? s.weight * (1 + s.reps/30) : m, 0);
+        return { label: fmtDateShort(g.date), v: Math.round(top) };
+      }).slice(-10);
+  }
+  const squatSeries = e1rmSeries('squat'), benchSeries = e1rmSeries('bench'), deadliftSeries = e1rmSeries('deadlift');
+
+  el.innerHTML = `
+    <div class="card"><div class="sec-title mt-1">Weekly running mileage (km)</div>${svgBarChart(mileagePoints)}</div>
+    <div class="card"><div class="sec-title mt-1">Long run pace (min/km, lower = faster)</div>${svgLineChart(paceLong)}</div>
+    <div class="card"><div class="sec-title mt-1">Estimated squat 1RM (kg)</div>${svgLineChart(squatSeries)}</div>
+    <div class="card"><div class="sec-title mt-1">Estimated bench 1RM (kg)</div>${svgLineChart(benchSeries)}</div>
+    <div class="card"><div class="sec-title mt-1">Estimated deadlift 1RM (kg)</div>${svgLineChart(deadliftSeries)}</div>`;
+}
+
+/* ============================================================
+   SETTINGS TAB
+   ============================================================ */
+function renderSettings(s) {
+  const el = document.getElementById('tab-settings');
+  el.innerHTML = `
+    <div class="card">
+      <div class="sec-title">Strava</div>
+      <p class="status-pill mt-1"><span class="dot ${stravaConnected()?'ok':''}"></span>${stravaConnected() ? `Connected as ${escapeHtml(s.stravaAthlete?.firstname||'athlete')}` : 'Not connected'}</p>
+      <div class="field mt-1"><label>Strava Client ID</label><input id="setClientId" value="${escapeHtml(s.stravaClientId)}" placeholder="from strava.com/settings/api"></div>
+      <div class="field"><label>Worker URL (from deploying strava-worker.js)</label><input id="setWorkerUrl" value="${escapeHtml(s.workerUrl)}" placeholder="https://your-worker.workers.dev"></div>
+      <div class="flex gap-1 mt-1">
+        ${stravaConnected() ? `<button class="btn btn-danger btn-sm" id="disconnectStravaBtn">Disconnect</button>` : `<button class="btn btn-primary btn-sm" id="connectStravaBtn">Connect Strava</button>`}
+        <button class="btn btn-ghost btn-sm" id="syncNowBtn">Sync now</button>
+      </div>
+      <p class="text-xs text-muted mt-1">See TRAINING_PLAN_SETUP.md for how to create the Strava API app and deploy the Worker — no coding, just pasting into two dashboards.</p>
+    </div>
+    <div class="card">
+      <div class="sec-title">Claude (plan generation &amp; photo/text analysis)</div>
+      <div class="field mt-1"><label>Anthropic API key</label><input id="setApiKey" type="password" value="${escapeHtml(s.anthropicApiKey)}" placeholder="sk-ant-..."></div>
+      <p class="text-xs text-muted">From console.anthropic.com — kept only in this browser, never sent anywhere except directly to Anthropic.</p>
+    </div>
+    <div class="card">
+      <div class="sec-title">About you</div>
+      <div class="field mt-1"><label>Bodyweight (kg, optional)</label><input id="setBodyweight" value="${escapeHtml(s.bodyweightKg)}"></div>
+      <div class="field"><label>Goal</label><input id="setGoal" value="${escapeHtml(s.goal)}"></div>
+      <div class="field"><label>Experience level</label><input id="setExperience" value="${escapeHtml(s.experienceLevel)}"></div>
+      <div class="field"><label>Anything else your coach should know</label><textarea id="setCoachNotes" rows="2" placeholder="injuries, preferences, PBs, etc.">${escapeHtml(s.coachNotes)}</textarea></div>
+    </div>
+    <div class="card">
+      <div class="sec-title">Gym equipment</div>
+      <div class="tag-list" id="equipTags">${s.equipment.map((eq,i) => `<span class="tag">${escapeHtml(eq)}<button data-i="${i}">✕</button></span>`).join('')}</div>
+      <div class="flex gap-1 mt-1"><input id="newEquip" placeholder="Add equipment"><button class="btn btn-ghost btn-sm" id="addEquipBtn">Add</button></div>
+    </div>
+    <div class="card">
+      <button class="btn btn-primary" id="saveSettingsBtn">Save settings</button>
+      <button class="btn btn-danger btn-sm" id="clearDataBtn" style="margin-left:.5rem">Clear all data</button>
+    </div>`;
+  document.getElementById('saveSettingsBtn').addEventListener('click', () => saveSettingsFromForm());
+  const cb = document.getElementById('connectStravaBtn'); if (cb) cb.addEventListener('click', () => { saveSettingsFromForm(true); connectStrava(); });
+  const db = document.getElementById('disconnectStravaBtn'); if (db) db.addEventListener('click', disconnectStrava);
+  document.getElementById('syncNowBtn').addEventListener('click', () => syncStrava(false));
+  document.getElementById('addEquipBtn').addEventListener('click', () => {
+    const inp = document.getElementById('newEquip'); if (!inp.value.trim()) return;
+    const cur = getSettings(); cur.equipment.push(inp.value.trim()); setSettings(cur); renderSettings(getSettings());
+  });
+  document.getElementById('equipTags').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const cur = getSettings(); cur.equipment.splice(+b.dataset.i, 1); setSettings(cur); renderSettings(getSettings());
+  }));
+  document.getElementById('clearDataBtn').addEventListener('click', () => {
+    if (confirm('This deletes all local training data (plans, logs, check-ins, Strava cache, and your saved keys) from this browser. Continue?')) {
+      ['settings','weeks','gymLogs','checkins','stravaCache'].forEach(k => localStorage.removeItem('tp_' + k));
+      toast('Cleared'); switchTab('today');
+    }
+  });
+}
+function saveSettingsFromForm(silent) {
+  const s = getSettings();
+  s.stravaClientId = document.getElementById('setClientId').value.trim();
+  s.workerUrl = document.getElementById('setWorkerUrl').value.trim();
+  s.anthropicApiKey = document.getElementById('setApiKey').value.trim();
+  s.bodyweightKg = document.getElementById('setBodyweight').value.trim();
+  s.goal = document.getElementById('setGoal').value.trim();
+  s.experienceLevel = document.getElementById('setExperience').value.trim();
+  s.coachNotes = document.getElementById('setCoachNotes').value.trim();
+  s.onboarded = true;
+  setSettings(s);
+  if (!silent) toast('Settings saved');
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+async function init() {
+  buildNav();
+  await handleOAuthRedirect();
+  const s = getSettings();
+  if (s.onboarded) switchTab(s.stravaAccessToken ? 'today' : 'today'); else switchTab('settings');
+  if (stravaConnected()) syncStrava(true);
+}
+init();
+</script>
+</body>
+</html>
