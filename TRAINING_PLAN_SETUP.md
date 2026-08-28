@@ -1,13 +1,14 @@
 # Training Plan — Setup Guide
 
-This app is a single web page (`training-plan.html`) that runs entirely in your browser. There's no software to install and nothing to code. You do need to do three one-time things, each just clicking through a website:
+This app is a single web page (`training-plan.html`) that runs entirely in your browser. There's no software to install and nothing to code. You do need to do a few one-time things, each just clicking through a website:
 
 1. Put the app somewhere you can open it (2 minutes)
 2. Create a free Strava "API app" so the page is allowed to read your activities (5 minutes)
 3. Deploy one small helper file to Cloudflare so your browser is allowed to talk to Strava (10 minutes)
 4. Get a free Anthropic API key so the app can write your weekly plan and read gym photos/notes (2 minutes)
+5. Optional: turn on sync so the app has the same data on every device you use it from (5 minutes)
 
-Do them in this order. Everything you paste in only lives in your own browser (localStorage) — nothing is sent to any server except Strava and Anthropic directly.
+Do them in this order. Everything you paste in only lives in your own browser (localStorage) — nothing is sent to any server except Strava, Anthropic, and (if you turn sync on) your own Worker, directly.
 
 ## Why step 3 exists
 
@@ -50,12 +51,24 @@ Pick whichever is easiest for you:
 2. Go to **API Keys → Create Key**. Copy the key (starts with `sk-ant-...`).
 3. Add a small amount of credit under **Billing** — this app's usage (a weekly plan + occasional photo/text analysis) costs a few cents a week at most.
 
-## 5. Connect everything in the app
+## 5. Turn on sync across devices (optional, but recommended)
+
+Without this, each device (phone, laptop) has its own separate copy of everything — nothing carries over. This step makes your plan, logs, and settings the same everywhere, using the same Worker from step 3.
+
+1. In the Cloudflare dashboard, go to **Storage & Databases → KV → Create a namespace**. Name it anything (e.g. `training-plan-data`) and create it.
+2. Go back to your Worker → **Settings → Bindings → Add binding → KV Namespace**. Set the **Variable name** to exactly `DATA_KV` and select the namespace you just created. Save/deploy.
+3. Back in **Variables and Secrets**, add one more: `SYNC_SECRET` = a passphrase you make up yourself (anything — this is just so nobody else can read or overwrite your data). Tick "Encrypt". Save/deploy.
+4. In the app, on **every device** you use it from: Settings → **Sync across devices** → enter the Worker URL (same as always) and the exact same passphrase → Save settings.
+
+That's it — from now on, every change auto-saves to your Worker, and opening the app pulls the latest before showing anything. If you ever need to double-check it's caught up, tap **Pull latest now**.
+
+## 6. Connect everything in the app
 
 Open `training-plan.html` (your GitHub Pages URL, or the local file) and go to the **Settings** tab:
 
 - Paste your **Strava Client ID** and your **Worker URL** (from steps 2 and 3), then tap **Save settings**, then **Connect Strava** and approve access.
 - Paste your **Anthropic API key** (from step 4).
+- If you set up sync (step 5), enter your sync passphrase too.
 - Fill in your equipment list, bodyweight (optional), and any notes for your coach (injuries, preferences, etc.).
 - Save settings.
 
@@ -76,4 +89,5 @@ You're set up. Go to **Today** or **Week** and tap **Generate This Week's Plan**
 - **"Strava connect failed"**: double check the Worker URL has no typo and that you added both environment variables in Cloudflare, then redeployed.
 - **Strava login redirects but nothing happens**: your Strava app's "Authorization Callback Domain" (step 2) must exactly match the domain you're opening the page from.
 - **Claude errors mentioning your API key**: check the key was copied in full and that your Anthropic account has billing/credit set up.
+- **Sync says "error" or a device isn't picking up changes**: the passphrase has to match *exactly* on every device — retype it rather than assume it copy-pasted cleanly. Also confirm the Worker has both the `DATA_KV` binding and the `SYNC_SECRET` variable set (Worker → Settings → Bindings / Variables and Secrets) and was redeployed after adding them.
 - Nothing here ever needs a terminal, `git`, or installing software — if a step is asking you to do that, something's gone off track.

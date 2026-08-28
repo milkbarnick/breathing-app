@@ -191,9 +191,14 @@ const CLAUDE_MODEL = 'claude-sonnet-5';
 /* ============================================================
    STORAGE
    ============================================================ */
+const SYNC_KEYS = ['settings', 'weeks', 'gymLogs', 'checkins', 'stravaCache'];
+let _applyingRemoteSync = false; // guards against a pull immediately re-triggering a push
 const S = {
   get(k, def) { try { const v = localStorage.getItem('tp_' + k); return v !== null ? JSON.parse(v) : def; } catch { return def; } },
-  set(k, v) { try { localStorage.setItem('tp_' + k, JSON.stringify(v)); } catch {} },
+  set(k, v) {
+    try { localStorage.setItem('tp_' + k, JSON.stringify(v)); } catch {}
+    if (!_applyingRemoteSync && SYNC_KEYS.includes(k)) scheduleSyncPush();
+  },
 };
 function defaultSettings() {
   return {
@@ -202,6 +207,7 @@ function defaultSettings() {
     stravaAccessToken: '', stravaRefreshToken: '', stravaTokenExpiresAt: 0,
     stravaAthlete: null,
     anthropicApiKey: '',
+    syncSecret: '',
     equipment: DEFAULT_EQUIPMENT.slice(),
     bodyweightKg: '', goal: 'General fitness / no race', experienceLevel: 'Intermediate — trained on/off for a while',
     coachNotes: '',
@@ -209,6 +215,68 @@ function defaultSettings() {
 }
 function getSettings() { return Object.assign(defaultSettings(), S.get('settings', {})); }
 function setSettings(s) { S.set('settings', s); }
+
+/* ============================================================
+   CROSS-DEVICE SYNC
+   Full-state, last-write-wins sync via the same Cloudflare Worker used
+   for Strava, backed by a KV namespace. Simple by design: every change
+   pushes the whole local state (settings/plans/logs), and loading the
+   app pulls the latest before rendering. Fine for one person using the
+   app from one device at a time — not built for simultaneous editing on
+   two devices at once.
+   ============================================================ */
+function syncConfigured() { const s = getSettings(); return !!(s.workerUrl && s.syncSecret); }
+let _syncPushTimer = null;
+function scheduleSyncPush() {
+  clearTimeout(_syncPushTimer);
+  _syncPushTimer = setTimeout(syncPush, 800);
+}
+async function syncPush() {
+  if (!syncConfigured()) return;
+  const s = getSettings();
+  const payload = {};
+  for (const k of SYNC_KEYS) payload[k] = S.get(k, null);
+  try {
+    await fetch(s.workerUrl.replace(/\/$/, '') + '/sync', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Sync-Secret': s.syncSecret },
+      body: JSON.stringify(payload),
+    });
+    setSyncStatus('synced');
+  } catch {
+    setSyncStatus('error'); // best-effort — don't block the UI on a sync failure
+  }
+}
+async function syncPull() {
+  if (!syncConfigured()) return false;
+  const s = getSettings();
+  try {
+    const resp = await fetch(s.workerUrl.replace(/\/$/, '') + '/sync', {
+      headers: { 'X-Sync-Secret': s.syncSecret },
+    });
+    if (!resp.ok) { setSyncStatus('error'); return false; }
+    const data = await resp.json();
+    if (!data || !Object.keys(data).length) return false;
+    _applyingRemoteSync = true;
+    for (const k of SYNC_KEYS) if (data[k] !== undefined && data[k] !== null) S.set(k, data[k]);
+    _applyingRemoteSync = false;
+    setSyncStatus('synced');
+    return true;
+  } catch {
+    setSyncStatus('error');
+    return false;
+  }
+}
+function setSyncStatus(status) {
+  S._syncStatus = { status, at: new Date().toISOString() };
+}
+function syncStatusText() {
+  if (!syncConfigured()) return 'Not set up — add a Worker URL and passphrase above';
+  const st = S._syncStatus;
+  if (!st) return 'Not synced yet this session';
+  const time = new Date(st.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return st.status === 'synced' ? `Last synced ${time}` : `Sync error at ${time} — check the passphrase matches on both devices`;
+}
 
 /* ============================================================
    UTIL
@@ -264,10 +332,10 @@ function disconnectStrava() {
 async function handleOAuthRedirect() {
   const params = new URLSearchParams(location.search);
   const code = params.get('code');
-  if (!code) return;
+  if (!code) return false;
   history.replaceState({}, '', cleanRedirectUri());
   const s = getSettings();
-  if (!s.workerUrl) { toast('Strava code received, but Worker URL is not set'); return; }
+  if (!s.workerUrl) { toast('Strava code received, but Worker URL is not set'); return false; }
   try {
     const resp = await fetch(s.workerUrl.replace(/\/$/, '') + '/token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -277,8 +345,10 @@ async function handleOAuthRedirect() {
     const data = await resp.json();
     applyStravaTokens(data);
     toast('Strava connected ✓');
+    return true;
   } catch (err) {
     toast('Strava connect failed: ' + err.message);
+    return false;
   }
 }
 async function describeStravaError(resp) {
@@ -955,7 +1025,7 @@ function renderSettings(s) {
       <div class="field"><label>Worker URL (from deploying strava-worker.js)</label><input id="setWorkerUrl" value="${escapeHtml(s.workerUrl)}" placeholder="https://your-worker.workers.dev"></div>
       <div class="flex gap-1 mt-1">
         ${stravaConnected() ? `<button class="btn btn-danger btn-sm" id="disconnectStravaBtn">Disconnect</button>` : `<button class="btn btn-primary btn-sm" id="connectStravaBtn">Connect Strava</button>`}
-        <button class="btn btn-ghost btn-sm" id="syncNowBtn">Sync now</button>
+        <button class="btn btn-ghost btn-sm" id="syncStravaNowBtn">Sync Strava now</button>
       </div>
       <p class="text-xs text-muted mt-1">See TRAINING_PLAN_SETUP.md for how to create the Strava API app and deploy the Worker — no coding, just pasting into two dashboards.</p>
     </div>
@@ -963,6 +1033,14 @@ function renderSettings(s) {
       <div class="sec-title">Claude (plan generation &amp; photo/text analysis)</div>
       <div class="field mt-1"><label>Anthropic API key</label><input id="setApiKey" type="password" value="${escapeHtml(s.anthropicApiKey)}" placeholder="sk-ant-..."></div>
       <p class="text-xs text-muted">From console.anthropic.com — kept only in this browser, never sent anywhere except directly to Anthropic.</p>
+    </div>
+    <div class="card">
+      <div class="sec-title">Sync across devices</div>
+      <p class="text-sm text-muted mt-1">Uses the same Worker as Strava above. Set a passphrase here (anything you like), enter the exact same one in this app on your other device(s), and your plans/logs/settings stay in sync — pushed automatically after every change, pulled fresh each time the app loads.</p>
+      <div class="field mt-1"><label>Sync passphrase</label><input id="setSyncSecret" type="password" value="${escapeHtml(s.syncSecret)}" placeholder="make one up, same on every device"></div>
+      <p class="status-pill mt-1"><span class="dot ${S._syncStatus?.status==='synced'?'ok':''}"></span>${syncStatusText()}</p>
+      <button class="btn btn-ghost btn-sm mt-1" id="syncPullNowBtn">Pull latest now</button>
+      <p class="text-xs text-muted mt-1">Requires the Worker's <code>SYNC_SECRET</code> variable and a <code>DATA_KV</code> namespace binding — see TRAINING_PLAN_SETUP.md.</p>
     </div>
     <div class="card">
       <div class="sec-title">About you</div>
@@ -983,7 +1061,15 @@ function renderSettings(s) {
   document.getElementById('saveSettingsBtn').addEventListener('click', () => saveSettingsFromForm());
   const cb = document.getElementById('connectStravaBtn'); if (cb) cb.addEventListener('click', () => { saveSettingsFromForm(true); connectStrava(); });
   const db = document.getElementById('disconnectStravaBtn'); if (db) db.addEventListener('click', disconnectStrava);
-  document.getElementById('syncNowBtn').addEventListener('click', () => syncStrava(false));
+  document.getElementById('syncStravaNowBtn').addEventListener('click', () => syncStrava(false));
+  document.getElementById('syncPullNowBtn').addEventListener('click', async () => {
+    saveSettingsFromForm(true);
+    if (!syncConfigured()) { toast('Add the Worker URL and a sync passphrase first'); return; }
+    toast('Pulling latest…');
+    const ok = await syncPull();
+    toast(ok ? 'Synced ✓' : 'Nothing to pull yet, or sync failed — check the passphrase matches on both devices');
+    renderAll();
+  });
   document.getElementById('addEquipBtn').addEventListener('click', () => {
     const inp = document.getElementById('newEquip'); if (!inp.value.trim()) return;
     const cur = getSettings(); cur.equipment.push(inp.value.trim()); setSettings(cur); renderSettings(getSettings());
@@ -991,11 +1077,23 @@ function renderSettings(s) {
   document.getElementById('equipTags').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     const cur = getSettings(); cur.equipment.splice(+b.dataset.i, 1); setSettings(cur); renderSettings(getSettings());
   }));
-  document.getElementById('clearDataBtn').addEventListener('click', () => {
-    if (confirm('This deletes all local training data (plans, logs, check-ins, Strava cache, and your saved keys) from this browser. Continue?')) {
-      ['settings','weeks','gymLogs','checkins','stravaCache'].forEach(k => localStorage.removeItem('tp_' + k));
-      toast('Cleared'); switchTab('today');
+  document.getElementById('clearDataBtn').addEventListener('click', async () => {
+    if (!confirm('This deletes all local training data (plans, logs, check-ins, Strava cache, and your saved keys) from this browser. Continue?')) return;
+    const wasSynced = syncConfigured();
+    const { workerUrl, syncSecret } = getSettings();
+    ['settings','weeks','gymLogs','checkins','stravaCache'].forEach(k => localStorage.removeItem('tp_' + k));
+    if (wasSynced) {
+      // Clear the remote copy too, or a synced device would just pull
+      // everything straight back on its next load.
+      try {
+        await fetch(workerUrl.replace(/\/$/, '') + '/sync', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Sync-Secret': syncSecret },
+          body: JSON.stringify({}),
+        });
+      } catch {}
     }
+    toast('Cleared'); switchTab('today');
   });
 }
 function saveSettingsFromForm(silent) {
@@ -1003,6 +1101,7 @@ function saveSettingsFromForm(silent) {
   s.stravaClientId = document.getElementById('setClientId').value.trim();
   s.workerUrl = document.getElementById('setWorkerUrl').value.trim();
   s.anthropicApiKey = document.getElementById('setApiKey').value.trim();
+  s.syncSecret = document.getElementById('setSyncSecret').value.trim();
   s.bodyweightKg = document.getElementById('setBodyweight').value.trim();
   s.goal = document.getElementById('setGoal').value.trim();
   s.experienceLevel = document.getElementById('setExperience').value.trim();
@@ -1017,9 +1116,20 @@ function saveSettingsFromForm(silent) {
    ============================================================ */
 async function init() {
   buildNav();
-  await handleOAuthRedirect();
+  const justConnectedStrava = await handleOAuthRedirect();
+  if (syncConfigured()) {
+    if (justConnectedStrava) {
+      // Local state (the tokens just obtained) is newer than whatever's
+      // remote — push it instead of pulling, or a pull here would clobber
+      // the fresh tokens with stale remote data.
+      clearTimeout(_syncPushTimer);
+      await syncPush();
+    } else {
+      await syncPull();
+    }
+  }
   const s = getSettings();
-  if (s.onboarded) switchTab(s.stravaAccessToken ? 'today' : 'today'); else switchTab('settings');
+  if (s.onboarded) switchTab('today'); else switchTab('settings');
   if (stravaConnected()) syncStrava(true);
 }
 init();
