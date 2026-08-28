@@ -1,5 +1,5 @@
 /**
- * Strava proxy for the Training Plan app.
+ * Strava proxy + cross-device sync store for the Training Plan app.
  *
  * Why this file exists: browsers are not allowed to call Strava's API
  * directly (Strava does not send the CORS headers a browser requires,
@@ -9,22 +9,68 @@
  * Strava on its behalf, adding the CORS headers the browser needs and
  * keeping your Client Secret out of the page entirely.
  *
+ * It also doubles as a tiny sync store: the app pushes its full local
+ * state (settings, plans, logs) here after every change and pulls it on
+ * load, so opening the app on a second device picks up the same data
+ * instead of starting from an empty localStorage.
+ *
  * You do not need to write or understand this code. Deploy it by pasting
- * it into the Cloudflare dashboard (see TRAINING_PLAN_SETUP.md) and set
- * two environment variables on the Worker: STRAVA_CLIENT_ID and
- * STRAVA_CLIENT_SECRET. That's it.
+ * it into the Cloudflare dashboard (see TRAINING_PLAN_SETUP.md) and set:
+ *   - STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET (environment variables)
+ *   - SYNC_SECRET (an environment variable — a passphrase you make up;
+ *     mark it "Encrypt". Enter the same passphrase in the app's Settings
+ *     on every device you use.)
+ *   - a KV namespace binding named DATA_KV (Settings -> Bindings -> KV
+ *     Namespace on the Worker)
+ * See TRAINING_PLAN_SETUP.md for exact steps.
  */
 
 const STRAVA_API = 'https://www.strava.com/api/v3';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
+const SYNC_KV_KEY = 'training-plan-data';
 
 function withCors(resp, origin) {
   const headers = new Headers(resp.headers);
   headers.set('Access-Control-Allow-Origin', origin || '*');
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Sync-Secret');
   headers.set('Access-Control-Max-Age', '86400');
   return new Response(resp.body, { status: resp.status, headers });
+}
+
+function checkSyncAuth(request, env, origin) {
+  if (!env.SYNC_SECRET) {
+    return withCors(new Response(JSON.stringify({ error: 'Worker has no SYNC_SECRET configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } }), origin);
+  }
+  const provided = request.headers.get('X-Sync-Secret') || '';
+  if (provided !== env.SYNC_SECRET) {
+    return withCors(new Response(JSON.stringify({ error: 'Invalid sync secret' }), { status: 401, headers: { 'Content-Type': 'application/json' } }), origin);
+  }
+  return null;
+}
+
+async function handleSyncGet(request, env, origin) {
+  const authFail = checkSyncAuth(request, env, origin);
+  if (authFail) return authFail;
+  if (!env.DATA_KV) {
+    return withCors(new Response(JSON.stringify({ error: 'Worker has no DATA_KV binding configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } }), origin);
+  }
+  const stored = await env.DATA_KV.get(SYNC_KV_KEY);
+  return withCors(new Response(stored || '{}', { status: 200, headers: { 'Content-Type': 'application/json' } }), origin);
+}
+
+async function handleSyncPut(request, env, origin) {
+  const authFail = checkSyncAuth(request, env, origin);
+  if (authFail) return authFail;
+  if (!env.DATA_KV) {
+    return withCors(new Response(JSON.stringify({ error: 'Worker has no DATA_KV binding configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } }), origin);
+  }
+  const body = await request.text();
+  try { JSON.parse(body); } catch {
+    return withCors(new Response(JSON.stringify({ error: 'Body is not valid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } }), origin);
+  }
+  await env.DATA_KV.put(SYNC_KV_KEY, body);
+  return withCors(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }), origin);
 }
 
 async function handleTokenExchange(request, env, origin) {
@@ -102,6 +148,12 @@ export default {
       }
       if (url.pathname.startsWith('/api/') && request.method === 'GET') {
         return await handleApiProxy(request, env, origin, url.pathname);
+      }
+      if (url.pathname === '/sync' && request.method === 'GET') {
+        return await handleSyncGet(request, env, origin);
+      }
+      if (url.pathname === '/sync' && request.method === 'PUT') {
+        return await handleSyncPut(request, env, origin);
       }
       return withCors(new Response('Not found', { status: 404 }), origin);
     } catch (err) {
