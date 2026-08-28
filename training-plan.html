@@ -379,6 +379,10 @@ async function callClaude({ system, content, maxTokens }) {
     body: JSON.stringify({
       model: CLAUDE_MODEL,
       max_tokens: maxTokens || 2000,
+      // These calls just need bounded, structured text back, not open-ended
+      // reasoning — disabling thinking avoids it silently eating into
+      // max_tokens and truncating the JSON before it's finished.
+      thinking: { type: 'disabled' },
       system,
       messages: [{ role: 'user', content }],
     }),
@@ -388,13 +392,19 @@ async function callClaude({ system, content, maxTokens }) {
     throw new Error(`Claude API error ${resp.status}: ${errText.slice(0,200)}`);
   }
   const data = await resp.json();
-  return data.content.map(c => c.text || '').join('');
+  const text = data.content.map(c => c.text || '').join('');
+  if (data.stop_reason === 'max_tokens') {
+    throw new Error(`Claude's response was cut off (hit the token limit). Got: "${text.slice(0, 150)}${text.length > 150 ? '…' : ''}"`);
+  }
+  return text;
 }
 function extractJson(text) {
   let t = text.trim();
   t = t.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   const start = t.indexOf('{'); const end = t.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('No JSON object found in response');
+  if (start === -1 || end === -1) {
+    throw new Error(`No JSON object found in response. Claude said: "${t.slice(0, 200)}${t.length > 200 ? '…' : ''}"`);
+  }
   return JSON.parse(t.slice(start, end + 1));
 }
 
@@ -478,7 +488,7 @@ async function generatePlan(extraNote) {
   const text = await callClaude({
     system: COACH_SYSTEM_PROMPT,
     content: [{ type: 'text', text: 'Athlete context (JSON):\n' + JSON.stringify(context, null, 2) + '\n\nGenerate the plan JSON now.' }],
-    maxTokens: 3000,
+    maxTokens: 6000,
   });
   const plan = extractJson(text);
   plan.id = uid(); plan.createdAt = new Date().toISOString();
@@ -497,7 +507,7 @@ async function analyzeGymInput({ imageBase64, imageMediaType, text }) {
   const content = [];
   if (imageBase64) content.push({ type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageBase64 } });
   content.push({ type: 'text', text: text ? `Notes: ${text}` : 'Extract the workout from this image.' });
-  const responseText = await callClaude({ system: GYM_ANALYZE_SYSTEM, content, maxTokens: 1500 });
+  const responseText = await callClaude({ system: GYM_ANALYZE_SYSTEM, content, maxTokens: 2000 });
   return extractJson(responseText);
 }
 
