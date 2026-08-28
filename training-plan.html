@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Training Plan</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,8 +17,13 @@
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg); color: var(--text); min-height: 100vh;
-  display: flex; flex-direction: column; padding-bottom: 70px;
+  background: var(--bg); color: var(--text);
+  /* 100dvh tracks the actual visible area on mobile browsers, avoiding the
+     layout jump/resize caused by min-height:100vh as the address bar
+     shows/hides; dvh-unsupported browsers just get the 100vh fallback. */
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column;
+  padding-bottom: calc(70px + env(safe-area-inset-bottom));
 }
 header {
   background: var(--surface); border-bottom: 1px solid var(--border);
@@ -26,7 +31,6 @@ header {
   justify-content: space-between; position: sticky; top: 0; z-index: 100;
 }
 .logo { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
-.logo a { color: inherit; text-decoration: none; }
 .desk-nav { display: flex; gap: 0.25rem; }
 .desk-nav button {
   background: none; border: none; color: var(--text2); padding: 0.45rem 0.85rem;
@@ -38,6 +42,7 @@ header {
   display: none; position: fixed; bottom: 0; left: 0; right: 0;
   background: var(--surface); border-top: 1px solid var(--border);
   z-index: 100; padding: 0.4rem 0.5rem;
+  padding-bottom: calc(0.4rem + env(safe-area-inset-bottom));
 }
 .mob-nav-inner { display: flex; gap: 0.25rem; }
 .mob-nav button {
@@ -114,6 +119,7 @@ label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 
 .modal {
   background: var(--surface); border-radius: 14px 14px 0 0; width: 100%; max-width: 500px;
   max-height: 88vh; overflow-y: auto; padding: 1.25rem;
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
 }
 @media (min-width: 560px) { .modal-overlay { align-items: center; } .modal { border-radius: 14px; } }
 .exercise-block { background: var(--surface2); border-radius: 8px; padding: 0.7rem; margin-bottom: 0.6rem; }
@@ -148,7 +154,7 @@ label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 
 <body>
 
 <header>
-  <div class="logo"><a href="index.html">&larr;</a> &nbsp;Training Plan</div>
+  <div class="logo">Training Plan</div>
   <div class="desk-nav" id="deskNav"></div>
 </header>
 
