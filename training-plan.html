@@ -14,7 +14,7 @@
   --text: #1a1a1a; --text2: #9a8070;
   --success: #5b8c5a; --success-dim: rgba(91,140,90,0.15);
   --danger: #c2453a; --danger-dim: rgba(194,69,58,0.13);
-  --warn: #c98a2e; --run: #4f7a68; --run-dim: rgba(79,122,104,0.15);
+  --warn: #c98a2e; --warn-dim: rgba(201,138,46,0.15); --run: #4f7a68; --run-dim: rgba(79,122,104,0.15);
   --gym: #8f4a52; --gym-dim: rgba(143,74,82,0.15);
   --radius: 14px;
 }
@@ -25,7 +25,7 @@
     --text: #f0e8df; --text2: #a08878;
     --success: #7fae6e; --success-dim: rgba(127,174,110,0.16);
     --danger: #d97a6e; --danger-dim: rgba(217,122,110,0.15);
-    --warn: #d9a355; --run: #6fa38e; --run-dim: rgba(111,163,142,0.16);
+    --warn: #d9a355; --warn-dim: rgba(217,163,85,0.17); --run: #6fa38e; --run-dim: rgba(111,163,142,0.16);
     --gym: #b06a72; --gym-dim: rgba(176,106,114,0.16);
   }
 }
@@ -141,6 +141,7 @@ label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 
 .badge-done { background: var(--success-dim); color: var(--success); }
 .badge-planned { background: var(--surface2); color: var(--text2); }
 .badge-accent { background: var(--accent-dim); color: var(--accent); }
+.badge-warn { background: var(--warn-dim); color: var(--warn); }
 .day-row {
   display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.4rem;
   border-bottom: 1px solid var(--border); cursor: pointer;
@@ -349,6 +350,35 @@ function fmtPaceFromSpeed(mps) {
   return `${m}:${pad(s)}/km`;
 }
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* Epley-formula e1RM from the heaviest top set in each matching gym log,
+   shared by the Trends charts and by the plan-generation context so the
+   coach reasons from the same strength trend the user sees. */
+const E1RM_LIFTS = {
+  squat: n => n.includes('squat'),
+  bench: n => n.includes('bench'),
+  deadlift: n => n.includes('deadlift'),
+  press: n => (n.includes('overhead') || n.includes('incline')) && !n.includes('bench'),
+};
+function e1rmSessions(gymLogs, matchFn) {
+  return gymLogs
+    .map(g => {
+      const ex = g.exercises.find(e => matchFn(e.name.toLowerCase()));
+      if (!ex) return null;
+      const top = ex.sets.reduce((m, s) => Math.max(m, s.weight * (1 + s.reps / 30)), 0);
+      return { date: g.date, e1rm: Math.round(top) };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+function e1rmSummary(gymLogs, matchFn) {
+  const sessions = e1rmSessions(gymLogs, matchFn);
+  if (!sessions.length) return { latest: null, trend: 'no-data', sessions: [] };
+  const latest = sessions[sessions.length - 1].e1rm;
+  const prior = sessions.length > 1 ? sessions[Math.max(0, sessions.length - 4)].e1rm : latest;
+  const trend = latest > prior ? 'up' : latest < prior ? 'down' : 'flat';
+  return { latest, trend, sessions: sessions.slice(-6) };
+}
 function toast(msg) {
   const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
   const duration = Math.min(12000, Math.max(2600, msg.length * 80));
@@ -560,22 +590,29 @@ FIXED WEEKLY STRUCTURE (never change these days or the type of session):
 - Thu: Quality run (intervals, tempo, hills, or fartlek — vary week to week based on recent training)
 - Fri: Gym (powerlifting-focused, ~60 minutes including warm-up and weighted mobility)
 - Sat: Rest
-- Sun: Long run, progressive distance building sensibly over the coming months (respect the ~10% rule week over week, and include an easier "step-back" week roughly every 4th week)
+- Sun: Long run, progressive distance building sensibly over the coming months (respect the ~10% rule week over week)
+
+PERIODIZATION (the context gives you programWeek, weekInBlock, and isDeloadWeek — computed deterministically, do not recompute or contradict them):
+- Training runs in 4-week blocks: 3 building weeks, then a deload on weekInBlock 4 (isDeloadWeek: true).
+- On a deload week, this applies to BOTH gym and running, not just running: cut gym volume/load roughly 40-50% (fewer sets and/or lighter weight, technique focus) and cut Thursday/Sunday running volume similarly — still show up, just lighter. Say explicitly in the rationale that this is a scheduled deload.
+- Use programWeek to keep a sense of the athlete's overall arc (e.g. "week 9" is later-stage than "week 2") — early weeks can be more conservative/technique-focused, later weeks can assume more accumulated capacity, within the same 4-week block rhythm.
+- recentWeeksSummary gives you up to the last 4 weeks of sessions with their status (done/planned/etc). Look for adherence patterns — e.g. a particular session type repeatedly left "planned" rather than "done" — and note it in the rationale if you spot one; adjust rather than just repeating a session type that keeps getting skipped.
 
 GYM PHILOSOPHY:
 - Powerlifting focus on the big three (squat, bench press, deadlift) plus an overhead/incline press, using only the athlete's available equipment (given in context).
 - Split the two sessions so squat/bench appear in one and deadlift/press in the other (rotate emphasis week to week).
-- Every session opens with a brief warm-up and a short WEIGHTED mobility block (e.g. loaded deep squat hold, weighted Cossack squat, banded shoulder dislocates with a light plate, loaded hip flexor stretch, kettlebell halos, suitcase carry) — always include 2-4 of these with sets/duration.
-- Progressive overload: use the athlete's logged sets/reps/weight history to decide the next load and rep target. If no history exists yet for a lift, prescribe a conservative, technique-first starting point appropriate to their stated experience level, and say so in the rationale.
-- Prescribe load as an absolute weight in kg when you have history to base it on, otherwise as an RPE target.
+- Every session opens with a brief warm-up and a short WEIGHTED mobility block (e.g. loaded deep squat hold, weighted Cossack squat, banded shoulder dislocates with a light plate, loaded hip flexor stretch, kettlebell halos, suitcase carry) — always include 2-4 of these with sets/duration, and vary the selection week to week rather than repeating the same drills every time.
+- strengthTrends gives you a current estimated 1RM (Epley formula) and trend (up/down/flat/no-data) for squat/bench/deadlift/press, alongside the raw session-by-session sets/reps/weight in recentGymSessions. Use both: prescribe the next load as a percentage of the current e1RM appropriate to the rep range (e.g. ~80-85% e1RM for a 5RM-range top set) rather than just eyeballing the last logged weight. If a lift's trend is "flat" or "down" across its recent sessions (and it isn't a scheduled deload week), that's a plateau — respond with a deliberate change (a rep-range shift, a light technique-focused session, or an extra deload) rather than prescribing the same stalled weight again, and say so in the rationale.
+- If no history exists yet for a lift (e1RM "no-data"), prescribe a conservative, technique-first starting point appropriate to their stated experience level, and say so in the rationale.
+- Prescribe load as an absolute weight in kg when you have an e1RM or history to base it on, otherwise as an RPE target.
 - Recent RPE/soreness trends in recentGymSessions are a recovery signal too: if recent sessions have run high on RPE or soreness, hold or slightly reduce load/volume that session rather than pushing the planned progression, and say so in the rationale.
 
 RUNNING PHILOSOPHY:
 - Use recent Strava pace/distance/elevation and how recent sessions felt (RPE/soreness in recentGymSessions) to calibrate Thursday's quality session and Sunday's long run distance/pace.
-- Never make big jumps; respect roughly the 10% rule week over week, and back off volume or intensity if recent RPE/soreness has been trending high.
+- Never make big jumps; respect roughly the 10% rule week over week, and back off volume or intensity if recent RPE/soreness has been trending high (independent of the scheduled deload week, which always applies regardless).
 - Tuesday is purely social/easy — do not make it harder even if fitness is improving.
 
-OUTPUT JSON SCHEMA (exact keys):
+OUTPUT JSON SCHEMA (exact keys — do not include programWeek/weekInBlock/isDeloadWeek in your output, those are input-only context):
 {
   "weekStart": "YYYY-MM-DD",
   "rationale": "2-4 sentence coach note: what changed this week and why, referencing their recent data",
@@ -596,12 +633,23 @@ OUTPUT JSON SCHEMA (exact keys):
 }
 Sessions must be in this exact order and cover exactly these five days.`;
 
+// Block periodization: every 4th program week is a deload, computed purely
+// from calendar distance to the first week ever generated — stable across
+// regeneration, out-of-order saves, or gaps, unlike counting array length.
+function programWeekOf(weekStartIso, firstWeekStartIso) {
+  const programWeek = Math.round((parseISO(weekStartIso) - parseISO(firstWeekStartIso)) / (7 * 86400000)) + 1;
+  const weekInBlock = ((programWeek - 1) % 4) + 1;
+  return { programWeek, weekInBlock, isDeloadWeek: weekInBlock === 4 };
+}
+
 async function generatePlan(extraNote) {
   const s = getSettings();
   const weeks = getWeeks();
   const lastWeek = weeks[weeks.length - 1];
   const nextMonday = lastWeek ? new Date(parseISO(lastWeek.weekStart).getTime() + 7*86400000) : mondayOf(new Date());
   const weekStartIso = toISODate(mondayOf(nextMonday));
+  const firstWeekStartIso = weeks.length ? weeks[0].weekStart : weekStartIso;
+  const programInfo = programWeekOf(weekStartIso, firstWeekStartIso);
 
   const cache = S.get('stravaCache', []);
   const cutoff = toISODate(new Date(Date.now() - 56*86400000));
@@ -610,21 +658,33 @@ async function generatePlan(extraNote) {
     pace: fmtPaceFromSpeed(a.avg_speed), elevGain: Math.round(a.elevation_gain||0),
     movingMin: Math.round(a.moving_time/60), avgHr: a.avg_hr,
   }));
-  const gymLogs = S.get('gymLogs', []).filter(g => g.date >= cutoff).map(g => ({
+  const allGymLogs = S.get('gymLogs', []);
+  const gymLogs = allGymLogs.filter(g => g.date >= cutoff).map(g => ({
     date: g.date, exercises: g.exercises.map(e => ({ name: e.name, sets: e.sets })), rpe: g.rpe, soreness: g.soreness,
   }));
-  const lastWeekSummary = lastWeek ? {
-    weekStart: lastWeek.weekStart,
-    sessions: lastWeek.sessions.map(x => ({ day: x.day, type: x.type, title: x.title, status: x.status })),
-  } : null;
+  // Last 4 weeks (not just 1) so the coach can spot adherence patterns —
+  // e.g. a session type repeatedly left "planned" rather than "done" —
+  // instead of only ever seeing what happened immediately prior.
+  const recentWeeksSummary = weeks.slice(-4).map(w => ({
+    weekStart: w.weekStart,
+    ...programWeekOf(w.weekStart, firstWeekStartIso),
+    sessions: w.sessions.map(x => ({ day: x.day, type: x.type, title: x.title, status: x.status })),
+  }));
+  const strengthTrends = {
+    squat: e1rmSummary(allGymLogs, E1RM_LIFTS.squat),
+    bench: e1rmSummary(allGymLogs, E1RM_LIFTS.bench),
+    deadlift: e1rmSummary(allGymLogs, E1RM_LIFTS.deadlift),
+    press: e1rmSummary(allGymLogs, E1RM_LIFTS.press),
+  };
 
   const context = {
     weekStartToGenerate: weekStartIso,
+    ...programInfo,
     athlete: {
       bodyweightKg: s.bodyweightKg || null, goal: s.goal, experienceLevel: s.experienceLevel,
       equipment: s.equipment, coachNotes: s.coachNotes || null,
     },
-    recentRuns, recentGymSessions: gymLogs, previousWeek: lastWeekSummary,
+    recentRuns, recentGymSessions: gymLogs, recentWeeksSummary, strengthTrends,
     adjustmentRequest: extraNote || null,
   };
 
@@ -635,6 +695,7 @@ async function generatePlan(extraNote) {
   });
   const plan = extractJson(text);
   plan.id = uid(); plan.createdAt = new Date().toISOString();
+  Object.assign(plan, programInfo); // computed locally, not left to the model to echo back correctly
   for (const sess of plan.sessions) {
     if (!sess.status) sess.status = 'planned';
     if (!sess.id) sess.id = uid();
@@ -828,10 +889,13 @@ function renderWeek(s) {
         <div class="flex gap-1" style="align-items:center">${badge}${status}</div></div>`;
     }).join('');
   }).join('');
+  const info = (week.programWeek != null) ? week : { ...week, ...programWeekOf(week.weekStart, weeks[0].weekStart) };
+  const weekBadge = `<span class="badge badge-accent">Week ${info.programWeek}</span>${info.isDeloadWeek ? ' <span class="badge badge-warn">Deload</span>' : ''}`;
   el.innerHTML = `
     <div class="card">
       <div class="sec-hdr"><span class="sec-title">Week of ${fmtDateShort(week.weekStart)}</span>
         <button class="btn btn-ghost btn-sm" id="regenBtn">\u{1F504} Regenerate</button></div>
+      <div class="flex gap-1 mt-1" style="margin-bottom:.6rem">${weekBadge}</div>
       ${rows}
     </div>
     <div class="card"><div class="sec-title mt-1">Coach note</div><p class="pre">${escapeHtml(week.rationale||'')}</p></div>`;
@@ -1068,22 +1132,16 @@ function renderTrends(s) {
   const paceLong = longRuns.map(a => ({ label: fmtDateShort(a.date), v: +(1000/a.avg_speed/60).toFixed(2) }));
 
   const gymLogs = S.get('gymLogs', []);
-  function e1rmSeries(name) {
-    return gymLogs.filter(g => g.exercises.some(e => e.name.toLowerCase().includes(name)))
-      .map(g => {
-        const ex = g.exercises.find(e => e.name.toLowerCase().includes(name));
-        const top = ex.sets.reduce((m,s) => s.weight * (1 + s.reps/30) > m ? s.weight * (1 + s.reps/30) : m, 0);
-        return { label: fmtDateShort(g.date), v: Math.round(top) };
-      }).slice(-10);
-  }
-  const squatSeries = e1rmSeries('squat'), benchSeries = e1rmSeries('bench'), deadliftSeries = e1rmSeries('deadlift');
+  const toPoints = lift => e1rmSessions(gymLogs, E1RM_LIFTS[lift]).map(s => ({ label: fmtDateShort(s.date), v: s.e1rm })).slice(-10);
+  const squatSeries = toPoints('squat'), benchSeries = toPoints('bench'), deadliftSeries = toPoints('deadlift'), pressSeries = toPoints('press');
 
   el.innerHTML = `
     <div class="card"><div class="sec-title mt-1">Weekly running mileage (km)</div>${svgBarChart(mileagePoints)}</div>
     <div class="card"><div class="sec-title mt-1">Long run pace (min/km, lower = faster)</div>${svgLineChart(paceLong)}</div>
     <div class="card"><div class="sec-title mt-1">Estimated squat 1RM (kg)</div>${svgLineChart(squatSeries)}</div>
     <div class="card"><div class="sec-title mt-1">Estimated bench 1RM (kg)</div>${svgLineChart(benchSeries)}</div>
-    <div class="card"><div class="sec-title mt-1">Estimated deadlift 1RM (kg)</div>${svgLineChart(deadliftSeries)}</div>`;
+    <div class="card"><div class="sec-title mt-1">Estimated deadlift 1RM (kg)</div>${svgLineChart(deadliftSeries)}</div>
+    <div class="card"><div class="sec-title mt-1">Estimated overhead/incline press 1RM (kg)</div>${svgLineChart(pressSeries)}</div>`;
 }
 
 /* ============================================================
