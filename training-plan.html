@@ -457,7 +457,7 @@ async function syncStrava(silent) {
 }
 function matchStravaToWeeks() {
   const cache = S.get('stravaCache', []);
-  const weeks = S.get('weeks', []);
+  const weeks = getWeeks();
   for (const w of weeks) {
     for (const sess of w.sessions) {
       if (sess.type !== 'run') continue;
@@ -582,7 +582,7 @@ Sessions must be in this exact order and cover exactly these five days.`;
 
 async function generatePlan(extraNote) {
   const s = getSettings();
-  const weeks = S.get('weeks', []);
+  const weeks = getWeeks();
   const lastWeek = weeks[weeks.length - 1];
   const nextMonday = lastWeek ? new Date(parseISO(lastWeek.weekStart).getTime() + 7*86400000) : mondayOf(new Date());
   const weekStartIso = toISODate(mondayOf(nextMonday));
@@ -619,7 +619,10 @@ async function generatePlan(extraNote) {
   });
   const plan = extractJson(text);
   plan.id = uid(); plan.createdAt = new Date().toISOString();
-  for (const sess of plan.sessions) if (!sess.status) sess.status = 'planned';
+  for (const sess of plan.sessions) {
+    if (!sess.status) sess.status = 'planned';
+    if (!sess.id) sess.id = uid();
+  }
   const idx = weeks.findIndex(w => w.weekStart === plan.weekStart);
   if (idx >= 0) weeks[idx] = plan; else weeks.push(plan);
   weeks.sort((a,b) => a.weekStart.localeCompare(b.weekStart));
@@ -674,8 +677,19 @@ function renderAll() {
 /* ============================================================
    TODAY TAB
    ============================================================ */
-function currentWeekFor(dateIso) {
+function getWeeks() {
   const weeks = S.get('weeks', []);
+  let migrated = false;
+  for (const w of weeks) {
+    for (const sess of w.sessions) {
+      if (!sess.id) { sess.id = uid(); migrated = true; }
+    }
+  }
+  if (migrated) S.set('weeks', weeks); // backfill ids for plans saved before sessions had them
+  return weeks;
+}
+function currentWeekFor(dateIso) {
+  const weeks = getWeeks();
   const monday = toISODate(mondayOf(parseISO(dateIso)));
   return weeks.find(w => w.weekStart === monday);
 }
@@ -698,12 +712,12 @@ function renderToday(s) {
     document.getElementById('genFirstPlan').addEventListener('click', () => runGeneratePlan());
     return;
   }
-  const sess = week.sessions.find(x => x.day === dow);
+  const todaySessions = week.sessions.filter(x => x.day === dow);
   el.innerHTML = `
     <div class="card">
       <div class="sec-hdr"><span class="sec-title">${today} — ${dow}</span>
         <button class="btn btn-ghost btn-sm" onclick="syncStrava(false)">\u{1F504} Sync Strava</button></div>
-      ${sess ? sessionCardHtml(sess, week) : `<p class="text-sm text-muted">Rest day. Recovery is training too.</p>`}
+      ${todaySessions.length ? todaySessions.map(sess => sessionCardHtml(sess, week)).join('<hr style="border-color:var(--border);margin:.75rem 0">') : `<p class="text-sm text-muted">Rest day. Recovery is training too.</p>`}
     </div>`;
   wireSessionCard(el);
 }
@@ -726,17 +740,51 @@ function sessionCardHtml(sess, week) {
   return `<div class="flex gap-1 wrap" style="align-items:center;margin-bottom:.4rem">${badge}${statusBadge}</div>
     <div class="text-sm" style="font-weight:700">${escapeHtml(sess.title||'')}</div>
     ${body}
-    <div class="flex gap-1 mt-2">
-      ${sess.type === 'gym' ? `<button class="btn btn-primary btn-sm log-gym-btn" data-day="${sess.day}">Log this session</button>` : ''}
-      ${sess.status !== 'done' ? `<button class="btn btn-ghost btn-sm mark-done-btn" data-day="${sess.day}">Mark done</button>` : ''}
+    <div class="flex gap-1 mt-2 wrap">
+      ${sess.type === 'gym' ? `<button class="btn btn-primary btn-sm log-gym-btn" data-session-id="${sess.id}">Log this session</button>` : ''}
+      ${sess.status !== 'done' ? `<button class="btn btn-ghost btn-sm mark-done-btn" data-session-id="${sess.id}">Mark done</button>` : ''}
+    </div>
+    <div class="flex gap-1 mt-1" style="align-items:center">
+      <label class="text-xs text-muted" for="moveSel-${sess.id}">Move to</label>
+      <select class="move-day-select" id="moveSel-${sess.id}" data-session-id="${sess.id}">
+        ${WEEK_DAYS.map(d => `<option value="${d}" ${d === sess.day ? 'selected' : ''}>${d}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm move-day-btn" data-session-id="${sess.id}">Move</button>
     </div>`;
 }
+function findSessionById(id) {
+  const weeks = getWeeks();
+  for (const w of weeks) {
+    const sess = w.sessions.find(x => x.id === id);
+    if (sess) return { week: w, sess };
+  }
+  return null;
+}
+function saveWeek(week) {
+  const weeks = getWeeks();
+  S.set('weeks', weeks.map(w => w.id === week.id ? week : w));
+}
 function wireSessionCard(root) {
-  root.querySelectorAll('.log-gym-btn').forEach(b => b.addEventListener('click', () => openGymLogModal(b.dataset.day)));
+  root.querySelectorAll('.log-gym-btn').forEach(b => b.addEventListener('click', () => {
+    const found = findSessionById(b.dataset.sessionId);
+    if (found) openGymLogModal(found.sess.day, undefined, undefined, found.sess.id);
+  }));
   root.querySelectorAll('.mark-done-btn').forEach(b => b.addEventListener('click', () => {
-    const week = currentWeekFor(todayStr()); const sess = week.sessions.find(x => x.day === b.dataset.day);
-    sess.status = 'done'; const weeks = S.get('weeks', []); S.set('weeks', weeks.map(w => w.id === week.id ? week : w));
+    const found = findSessionById(b.dataset.sessionId);
+    if (!found) return;
+    found.sess.status = 'done';
+    saveWeek(found.week);
     toast('Marked done'); renderAll();
+  }));
+  root.querySelectorAll('.move-day-btn').forEach(b => b.addEventListener('click', () => {
+    const found = findSessionById(b.dataset.sessionId);
+    if (!found) return;
+    const select = root.querySelector(`.move-day-select[data-session-id="${b.dataset.sessionId}"]`);
+    const newDay = select.value;
+    if (newDay === found.sess.day) return;
+    found.sess.day = newDay;
+    saveWeek(found.week);
+    toast(`Moved to ${newDay}`); renderAll();
   }));
 }
 /* ============================================================
@@ -744,7 +792,7 @@ function wireSessionCard(root) {
    ============================================================ */
 function renderWeek(s) {
   const el = document.getElementById('tab-week');
-  const weeks = S.get('weeks', []);
+  const weeks = getWeeks();
   const week = weeks[weeks.length - 1];
   if (!week) {
     el.innerHTML = `<div class="card empty"><div class="ico">\u{1F4CB}</div><div>No plan yet</div>
@@ -753,14 +801,16 @@ function renderWeek(s) {
     return;
   }
   const rows = WEEK_DAYS.map(day => {
-    const sess = week.sessions.find(x => x.day === day);
-    if (!sess) return `<div class="day-row"><span class="day-label">${day}</span><div class="day-main"><div class="day-title text-muted">Rest</div></div><span class="badge badge-rest">Rest</span></div>`;
-    const badge = sess.type === 'gym' ? '<span class="badge badge-gym">Gym</span>' : '<span class="badge badge-run">Run</span>';
-    const status = sess.status === 'done' ? '<span class="badge badge-done">✓</span>' : '';
-    const sub = sess.type === 'gym' ? (sess.exercises||[]).map(e=>e.name).join(', ') : (sess.targetKm ? sess.targetKm+'km' : '') + (sess.structure ? ' · ' + sess.structure : '');
-    return `<div class="day-row" data-day="${day}"><span class="day-label">${day}</span>
-      <div class="day-main"><div class="day-title">${escapeHtml(sess.title||'')}</div><div class="day-sub">${escapeHtml(sub)}</div></div>
-      <div class="flex gap-1" style="align-items:center">${badge}${status}</div></div>`;
+    const daySessions = week.sessions.filter(x => x.day === day);
+    if (!daySessions.length) return `<div class="day-row"><span class="day-label">${day}</span><div class="day-main"><div class="day-title text-muted">Rest</div></div><span class="badge badge-rest">Rest</span></div>`;
+    return daySessions.map(sess => {
+      const badge = sess.type === 'gym' ? '<span class="badge badge-gym">Gym</span>' : '<span class="badge badge-run">Run</span>';
+      const status = sess.status === 'done' ? '<span class="badge badge-done">✓</span>' : '';
+      const sub = sess.type === 'gym' ? (sess.exercises||[]).map(e=>e.name).join(', ') : (sess.targetKm ? sess.targetKm+'km' : '') + (sess.structure ? ' · ' + sess.structure : '');
+      return `<div class="day-row" data-session-id="${sess.id}"><span class="day-label">${day}</span>
+        <div class="day-main"><div class="day-title">${escapeHtml(sess.title||'')}</div><div class="day-sub">${escapeHtml(sub)}</div></div>
+        <div class="flex gap-1" style="align-items:center">${badge}${status}</div></div>`;
+    }).join('');
   }).join('');
   el.innerHTML = `
     <div class="card">
@@ -773,9 +823,9 @@ function renderWeek(s) {
     const note = prompt('Anything to factor in for this week (optional)? e.g. sore knee, travelling, short on time');
     runGeneratePlan(note || undefined);
   });
-  el.querySelectorAll('.day-row[data-day]').forEach(r => r.addEventListener('click', () => {
-    const sess = week.sessions.find(x => x.day === r.dataset.day);
-    openDayDetailModal(sess, week);
+  el.querySelectorAll('.day-row[data-session-id]').forEach(r => r.addEventListener('click', () => {
+    const found = findSessionById(r.dataset.sessionId);
+    if (found) openDayDetailModal(found.sess, found.week);
   }));
 }
 function openDayDetailModal(sess, week) {
@@ -784,7 +834,7 @@ function openDayDetailModal(sess, week) {
       <button class="btn btn-ghost btn-sm" onclick="closeModal()">Close</button></div>
     ${sessionCardHtml(sess, week)}`);
   wireSessionCard(document.getElementById('logModalBody'));
-  document.getElementById('logModalBody').querySelectorAll('.log-gym-btn, .mark-done-btn').forEach(b =>
+  document.getElementById('logModalBody').querySelectorAll('.log-gym-btn, .mark-done-btn, .move-day-btn').forEach(b =>
     b.addEventListener('click', () => setTimeout(closeModal, 50)));
 }
 async function runGeneratePlan(note) {
@@ -876,10 +926,10 @@ function handlePhotoUpload(e) {
   e.target.value = '';
 }
 
-function openGymLogModal(day, prefill, source) {
+function openGymLogModal(day, prefill, source, sessionId) {
   const data = prefill || { exercises: [{ name: '', sets: [{ reps: 5, weight: 0 }] }], notes: '', rpe: 6, soreness: 2 };
   window._gymLogDraft = JSON.parse(JSON.stringify(data));
-  window._gymLogDay = day; window._gymLogSource = source || 'manual';
+  window._gymLogDay = day; window._gymLogSource = source || 'manual'; window._gymLogSessionId = sessionId || null;
   renderGymLogModal();
 }
 function renderGymLogModal() {
@@ -940,10 +990,18 @@ function wireGymLogModal() {
     const logs = S.get('gymLogs', []);
     logs.push({ id: uid(), date: todayStr(), day: window._gymLogDay, exercises: d.exercises, rpe: d.rpe, soreness: d.soreness, notes: d.notes, source: window._gymLogSource });
     S.set('gymLogs', logs);
-    const week = currentWeekFor(todayStr());
-    if (week) {
-      const sess = week.sessions.find(x => x.day === window._gymLogDay);
-      if (sess) { sess.status = 'done'; const weeks = S.get('weeks', []); S.set('weeks', weeks.map(w => w.id === week.id ? week : w)); }
+    // Prefer the exact session this log was opened from (set when logging via
+    // a session card's "Log this session" button); fall back to matching by
+    // day for the generic Log-tab entry point, which isn't tied to one session.
+    if (window._gymLogSessionId) {
+      const found = findSessionById(window._gymLogSessionId);
+      if (found) { found.sess.status = 'done'; saveWeek(found.week); }
+    } else {
+      const week = currentWeekFor(todayStr());
+      if (week) {
+        const sess = week.sessions.find(x => x.day === window._gymLogDay);
+        if (sess) { sess.status = 'done'; saveWeek(week); }
+      }
     }
     closeModal(); toast('Session saved'); renderAll();
   });
