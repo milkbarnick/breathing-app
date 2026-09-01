@@ -61,36 +61,69 @@ header p {
   margin-top: 0.3rem;
 }
 
-.app-nav {
+/* App switcher: intentionally fixed colors (not the page's own --accent
+   etc.) so this bar looks pixel-identical on every page in this repo —
+   a stable landmark rather than something that jumps between themes. */
+.app-switch {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  padding: 0.85rem 1.5rem 0;
+  background: #14141c;
+  border-bottom: 1px solid #2a2a38;
+  padding: 0.5rem 0.75rem;
 }
 
-.app-nav-link {
-  border: 1.5px solid var(--border);
-  border-radius: 2rem;
-  padding: 0.35rem 0.9rem;
-  font-size: 0.78rem;
-  color: var(--muted);
+.app-switch-links { display: flex; gap: 0.4rem; overflow-x: auto; flex: 1; }
+
+.app-switch-link {
+  color: #9090a8;
   text-decoration: none;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #2e2e42;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 
-.app-nav-link:hover { border-color: var(--accent); color: var(--accent); }
+.app-switch-link:hover { border-color: #6c63ff; color: #e8e8f0; }
 
-.app-nav-link:focus-visible {
-  outline: 2px solid var(--accent);
+.app-switch-link:focus-visible {
+  outline: 2px solid #6c63ff;
   outline-offset: 2px;
 }
 
-.app-nav-link.active {
-  background: var(--accent);
-  border-color: var(--accent);
+.app-switch-link.active {
+  background: #6c63ff;
+  border-color: #6c63ff;
   color: #fff;
   font-weight: 600;
+}
+
+.app-switch-refresh {
+  background: none;
+  border: 1px solid #2e2e42;
+  color: #9090a8;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.app-switch-refresh:hover { border-color: #6c63ff; color: #e8e8f0; }
+
+.app-switch-refresh:focus-visible {
+  outline: 2px solid #6c63ff;
+  outline-offset: 2px;
 }
 
 .exercises {
@@ -403,8 +436,8 @@ footer {
   header h1 { font-size: 1.3rem; }
   header p { display: none; }
 
-  .app-nav { padding: 0.6rem 1rem 0; gap: 0.4rem; }
-  .app-nav-link { padding: 0.3rem 0.7rem; font-size: 0.72rem; }
+  .app-switch { padding: 0.4rem 0.6rem; }
+  .app-switch-link { padding: 0.3rem 0.7rem; font-size: 0.72rem; }
 
   .exercises { padding: 0.75rem 1rem 0; gap: 0.5rem; }
   .exercise-btn { padding: 0.35rem 0.85rem; font-size: 0.8rem; }
