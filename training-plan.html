@@ -345,8 +345,8 @@ function mondayOf(date) {
 function fmtDateShort(iso) { const d = parseISO(iso); return d.toLocaleDateString(undefined, { month:'short', day:'numeric' }); }
 function fmtPaceFromSpeed(mps) {
   if (!mps) return '—';
-  const secPerKm = 1000 / mps;
-  const m = Math.floor(secPerKm / 60), s = Math.round(secPerKm % 60);
+  const totalSec = Math.round(1000 / mps); // round once, on the whole value, so seconds can't round up to a nonsensical 60
+  const m = Math.floor(totalSec / 60), s = totalSec % 60;
   return `${m}:${pad(s)}/km`;
 }
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -597,6 +597,7 @@ PERIODIZATION (the context gives you programWeek, weekInBlock, and isDeloadWeek 
 - On a deload week, this applies to BOTH gym and running, not just running: cut gym volume/load roughly 40-50% (fewer sets and/or lighter weight, technique focus) and cut Thursday/Sunday running volume similarly — still show up, just lighter. Say explicitly in the rationale that this is a scheduled deload.
 - Use programWeek to keep a sense of the athlete's overall arc (e.g. "week 9" is later-stage than "week 2") — early weeks can be more conservative/technique-focused, later weeks can assume more accumulated capacity, within the same 4-week block rhythm.
 - recentWeeksSummary gives you up to the last 4 weeks of sessions with their status (done/planned/etc). Look for adherence patterns — e.g. a particular session type repeatedly left "planned" rather than "done" — and note it in the rationale if you spot one; adjust rather than just repeating a session type that keeps getting skipped.
+- unresolvedFromLastWeek lists specific sessions from the week immediately prior that were never marked done — these are recent enough to be real, actionable misses, not just old history. Address them explicitly: for an isolated miss, briefly acknowledge it and move on (don't just silently re-prescribe it as if nothing happened); if it lines up with a repeated pattern from recentWeeksSummary, treat that as a signal the schedule or intensity needs to change, not something to keep prescribing unchanged and hoping it sticks this time.
 
 GYM PHILOSOPHY:
 - Powerlifting focus on the big three (squat, bench press, deadlift) plus an overhead/incline press, using only the athlete's available equipment (given in context).
@@ -610,6 +611,7 @@ GYM PHILOSOPHY:
 RUNNING PHILOSOPHY:
 - Use recent Strava pace/distance/elevation and how recent sessions felt (RPE/soreness in recentGymSessions) to calibrate Thursday's quality session and Sunday's long run distance/pace.
 - Never make big jumps; respect roughly the 10% rule week over week, and back off volume or intensity if recent RPE/soreness has been trending high (independent of the scheduled deload week, which always applies regardless).
+- Heart rate as a fatigue signal: each entry in recentRuns includes avgHr and paceMinPerKm (plus dayOfWeek, which tells you the role — Tue is always the easy trail run with Bob, Thu is quality, Sun is the long run, per the fixed structure above). Compare avgHr at a similar pace/role across recent weeks: a rising avgHr for the same or slower pace on the same type of run (especially Tue's easy runs, which should be the most stable baseline) is a classic overreaching signal — treat a clear rising trend as a reason to back off intensity or volume that week, even if RPE/soreness look fine, and say so in the rationale. Don't over-read noisy single-run swings or runs affected by heat/terrain — look for a real multi-run trend.
 - Tuesday is purely social/easy — do not make it harder even if fitness is improving.
 
 OUTPUT JSON SCHEMA (exact keys — do not include programWeek/weekInBlock/isDeloadWeek in your output, those are input-only context):
@@ -654,7 +656,8 @@ async function generatePlan(extraNote) {
   const cache = S.get('stravaCache', []);
   const cutoff = toISODate(new Date(Date.now() - 56*86400000));
   const recentRuns = cache.filter(a => a.date >= cutoff).map(a => ({
-    date: a.date, type: a.sport_type, km: +(a.distance/1000).toFixed(2),
+    date: a.date, dayOfWeek: WEEK_DAYS[(parseISO(a.date).getDay() + 6) % 7], type: a.sport_type,
+    km: +(a.distance/1000).toFixed(2), paceMinPerKm: a.avg_speed ? +(1000 / a.avg_speed / 60).toFixed(2) : null,
     pace: fmtPaceFromSpeed(a.avg_speed), elevGain: Math.round(a.elevation_gain||0),
     movingMin: Math.round(a.moving_time/60), avgHr: a.avg_hr,
   }));
@@ -676,6 +679,12 @@ async function generatePlan(extraNote) {
     deadlift: e1rmSummary(allGymLogs, E1RM_LIFTS.deadlift),
     press: e1rmSummary(allGymLogs, E1RM_LIFTS.press),
   };
+  // Sessions from the week just gone that never got marked done — these are
+  // recent enough to be genuine, actionable misses (not just old history
+  // recentWeeksSummary's pattern-spotting already covers).
+  const unresolvedFromLastWeek = lastWeek
+    ? lastWeek.sessions.filter(x => x.status !== 'done').map(x => ({ day: x.day, type: x.type, title: x.title }))
+    : [];
 
   const context = {
     weekStartToGenerate: weekStartIso,
@@ -684,7 +693,7 @@ async function generatePlan(extraNote) {
       bodyweightKg: s.bodyweightKg || null, goal: s.goal, experienceLevel: s.experienceLevel,
       equipment: s.equipment, coachNotes: s.coachNotes || null,
     },
-    recentRuns, recentGymSessions: gymLogs, recentWeeksSummary, strengthTrends,
+    recentRuns, recentGymSessions: gymLogs, recentWeeksSummary, strengthTrends, unresolvedFromLastWeek,
     adjustmentRequest: extraNote || null,
   };
 
@@ -1068,6 +1077,15 @@ function wireGymLogModal() {
     d.notes = document.getElementById('glNotes').value.trim();
     d.exercises = d.exercises.filter(e => e.name.trim());
     const logs = S.get('gymLogs', []);
+    // Compare this session's e1RM against prior best (from logs before this
+    // one is added) for each tracked lift it touches, before pushing it in.
+    const prLifts = [];
+    for (const [liftName, matchFn] of Object.entries(E1RM_LIFTS)) {
+      const newE1rm = e1rmSessions([{ date: todayStr(), exercises: d.exercises }], matchFn)[0]?.e1rm;
+      if (!newE1rm) continue;
+      const priorBest = Math.max(0, ...e1rmSessions(logs, matchFn).map(x => x.e1rm));
+      if (priorBest > 0 && newE1rm > priorBest) prLifts.push(`${liftName} ${newE1rm}kg`);
+    }
     logs.push({ id: uid(), date: todayStr(), day: window._gymLogDay, exercises: d.exercises, rpe: d.rpe, soreness: d.soreness, notes: d.notes, source: window._gymLogSource });
     S.set('gymLogs', logs);
     // Prefer the exact session this log was opened from (set when logging via
@@ -1083,7 +1101,9 @@ function wireGymLogModal() {
         if (sess) { sess.status = 'done'; saveWeek(week); }
       }
     }
-    closeModal(); toast('Session saved'); renderAll();
+    closeModal();
+    toast(prLifts.length ? `Session saved · New PR: ${prLifts.join(', ')} \u{1F389}` : 'Session saved');
+    renderAll();
   });
 }
 
