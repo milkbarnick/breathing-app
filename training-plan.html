@@ -6,14 +6,28 @@
 <title>Training Plan</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Warm palette matching the breathing app (index.html) — same variable
+   names used throughout this file so the retheme is just these values. */
 :root {
-  --bg: #0f0f13; --surface: #1a1a24; --surface2: #252535; --border: #2e2e42;
-  --accent: #6c63ff; --accent-dim: rgba(108,99,255,0.18);
-  --text: #e8e8f0; --text2: #9090a8;
-  --success: #4ade80; --success-dim: rgba(74,222,128,0.15);
-  --danger: #f87171; --danger-dim: rgba(248,113,113,0.15);
-  --warn: #fbbf24; --run: #38bdf8; --gym: #f472b6;
-  --radius: 10px;
+  --bg: #fef9f4; --surface: #ffffff; --surface2: #f5e2cc; --border: #ece0d4;
+  --accent: #c8522a; --accent-dim: rgba(200,82,42,0.14);
+  --text: #1a1a1a; --text2: #9a8070;
+  --success: #5b8c5a; --success-dim: rgba(91,140,90,0.15);
+  --danger: #c2453a; --danger-dim: rgba(194,69,58,0.13);
+  --warn: #c98a2e; --run: #4f7a68; --run-dim: rgba(79,122,104,0.15);
+  --gym: #8f4a52; --gym-dim: rgba(143,74,82,0.15);
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1510; --surface: #241810; --surface2: #2e1e14; --border: #3e2a1e;
+    --accent: #d96030; --accent-dim: rgba(217,96,48,0.18);
+    --text: #f0e8df; --text2: #a08878;
+    --success: #7fae6e; --success-dim: rgba(127,174,110,0.16);
+    --danger: #d97a6e; --danger-dim: rgba(217,122,110,0.15);
+    --warn: #d9a355; --run: #6fa38e; --run-dim: rgba(111,163,142,0.16);
+    --gym: #b06a72; --gym-dim: rgba(176,106,114,0.16);
+  }
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -60,7 +74,7 @@ header {
 .desk-nav { display: flex; gap: 0.25rem; }
 .desk-nav button {
   background: none; border: none; color: var(--text2); padding: 0.45rem 0.85rem;
-  border-radius: 8px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;
+  border-radius: 2rem; cursor: pointer; font-size: 0.85rem; white-space: nowrap;
 }
 .desk-nav button:hover { background: var(--surface2); color: var(--text); }
 .desk-nav button.active { background: var(--accent); color: #fff; }
@@ -99,28 +113,30 @@ main { flex: 1; max-width: 760px; width: 100%; margin: 0 auto; padding: 1rem; }
 .flex { display: flex; } .gap-1 { gap: 0.5rem; } .flex-1 { flex: 1; }
 .wrap { flex-wrap: wrap; }
 .btn {
-  border: none; border-radius: 8px; padding: 0.55rem 0.9rem; font-size: 0.85rem;
+  border: none; border-radius: 2rem; padding: 0.55rem 0.9rem; font-size: 0.85rem;
   cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem;
+  transition: opacity 0.15s, border-color 0.15s;
 }
 .btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.88; }
 .btn-ghost { background: var(--surface2); color: var(--text); }
-.btn-success { background: var(--success); color: #08210f; }
+.btn-success { background: var(--success); color: #fff; }
 .btn-danger { background: var(--danger-dim); color: var(--danger); }
 .btn-sm { padding: 0.35rem 0.6rem; font-size: 0.75rem; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 input, textarea, select {
-  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-  border-radius: 8px; padding: 0.5rem 0.6rem; font-size: 0.85rem; width: 100%;
+  background: var(--surface2); border: 1.5px solid var(--border); color: var(--text);
+  border-radius: 10px; padding: 0.5rem 0.6rem; font-size: 0.85rem; width: 100%;
   font-family: inherit;
 }
 label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 0.25rem; }
 .field { margin-bottom: 0.7rem; }
 .badge {
-  font-size: 0.68rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px;
+  font-size: 0.68rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 1rem;
   text-transform: uppercase; letter-spacing: 0.03em;
 }
-.badge-run { background: rgba(56,189,248,0.15); color: var(--run); }
-.badge-gym { background: rgba(244,114,182,0.15); color: var(--gym); }
+.badge-run { background: var(--run-dim); color: var(--run); }
+.badge-gym { background: var(--gym-dim); color: var(--gym); }
 .badge-rest { background: var(--surface2); color: var(--text2); }
 .badge-done { background: var(--success-dim); color: var(--success); }
 .badge-planned { background: var(--surface2); color: var(--text2); }
@@ -148,19 +164,20 @@ label { font-size: 0.78rem; color: var(--text2); display: block; margin-bottom: 
   padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
 }
 @media (min-width: 560px) { .modal-overlay { align-items: center; } .modal { border-radius: 14px; } }
-.exercise-block { background: var(--surface2); border-radius: 8px; padding: 0.7rem; margin-bottom: 0.6rem; }
+.exercise-block { background: var(--surface2); border-radius: 12px; padding: 0.7rem; margin-bottom: 0.6rem; }
 .exercise-block .ex-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
 .set-row { display: grid; grid-template-columns: 24px 1fr 1fr 28px; gap: 0.4rem; align-items: center; margin-bottom: 0.35rem; }
 .col-labels { display: grid; grid-template-columns: 24px 1fr 1fr 28px; gap: 0.4rem; font-size: 0.65rem; color: var(--text2); margin-bottom: 0.3rem; }
-.chk { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; width: 28px; height: 28px; cursor: pointer; color: var(--success); }
+.chk { background: var(--surface); border: 1.5px solid var(--border); border-radius: 50%; width: 28px; height: 28px; cursor: pointer; color: var(--success); transition: border-color 0.15s; }
+.chk:hover { border-color: var(--accent); }
 .chk.done { background: var(--success-dim); border-color: var(--success); }
 .tag-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
-.tag { background: var(--surface2); border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.35rem; }
+.tag { background: var(--surface2); border-radius: 1rem; padding: 0.3rem 0.6rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.35rem; }
 .tag button { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 0.8rem; }
 .toast {
   position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
   background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-  padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.82rem; z-index: 300;
+  padding: 0.6rem 1rem; border-radius: 12px; font-size: 0.82rem; z-index: 300;
   opacity: 0; pointer-events: none; transition: opacity 0.2s;
 }
 .toast.show { opacity: 1; }
