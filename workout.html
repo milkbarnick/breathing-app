@@ -48,18 +48,32 @@
     .logo { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
 
     /* ---- App switcher (links to the other apps in this repo) ---- */
+    /* Intentionally fixed colors (not this page's own --accent etc.) so
+       this bar looks pixel-identical on every page in this repo — a
+       stable landmark rather than something that jumps between themes. */
     .app-switch {
-      display: flex; gap: 0.4rem; padding: 0.5rem 1.25rem;
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      overflow-x: auto; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: #14141c; border-bottom: 1px solid #2a2a38;
+      flex-shrink: 0;
     }
-    .app-switch a {
-      color: var(--text2); text-decoration: none; font-size: 0.78rem;
-      padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid var(--border);
-      white-space: nowrap; transition: border-color 0.15s, color 0.15s, background 0.15s;
+    .app-switch-links { display: flex; gap: 0.4rem; overflow-x: auto; flex: 1; }
+    .app-switch-link {
+      color: #9090a8; text-decoration: none; font-size: 0.78rem;
+      padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid #2e2e42;
+      white-space: nowrap; flex-shrink: 0;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
-    .app-switch a:hover { border-color: var(--accent); color: var(--text); }
-    .app-switch a.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .app-switch-link:hover { border-color: #6c63ff; color: #e8e8f0; }
+    .app-switch-link.active { background: #6c63ff; border-color: #6c63ff; color: #fff; font-weight: 600; }
+    .app-switch-refresh {
+      background: none; border: 1px solid #2e2e42; color: #9090a8; border-radius: 8px;
+      width: 30px; height: 30px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; line-height: 1; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .app-switch-refresh:hover { border-color: #6c63ff; color: #e8e8f0; }
 
     /* ---- Desktop nav ---- */
     .desk-nav { display: flex; gap: 0.25rem; }
@@ -330,11 +344,14 @@
   </nav>
 </header>
 
-<nav class="app-switch" aria-label="Apps">
-  <a href="index.html">Breathe</a>
-  <a href="workout.html" class="active">Workout</a>
-  <a href="training-plan.html">Training Plan</a>
-</nav>
+<div class="app-switch">
+  <nav class="app-switch-links" aria-label="Apps">
+    <a href="index.html" class="app-switch-link">Breathe</a>
+    <a href="workout.html" class="app-switch-link active">Workout</a>
+    <a href="training-plan.html" class="app-switch-link">Training Plan</a>
+  </nav>
+  <button class="app-switch-refresh" onclick="location.reload()" aria-label="Refresh app" title="Refresh">&#x21bb;</button>
+</div>
 
 <main>
   <!-- DASHBOARD -->
