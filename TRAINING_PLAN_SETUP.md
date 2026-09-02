@@ -7,12 +7,13 @@ This app is a single web page (`training-plan.html`) that runs entirely in your 
 3. Deploy one small helper file to Cloudflare so your browser is allowed to talk to Strava (10 minutes)
 4. Get a free Anthropic API key so the app can write your weekly plan and read gym photos/notes (2 minutes)
 5. Optional: turn on sync so the app has the same data on every device you use it from (5 minutes)
+6. Optional: connect Whoop so recovery/HRV/strain feed into the coach automatically (10 minutes)
 
-Do them in this order. Everything you paste in only lives in your own browser (localStorage) — nothing is sent to any server except Strava, Anthropic, and (if you turn sync on) your own Worker, directly.
+Do them in this order. Everything you paste in only lives in your own browser (localStorage) — nothing is sent to any server except Strava, Whoop, Anthropic, and (if you turn sync on) your own Worker, directly.
 
-## Why step 3 exists
+## Why steps 3 and 6 need a Worker
 
-Browsers aren't allowed to call Strava's servers directly for security reasons (Strava doesn't send back the permission headers a browser requires), and your Strava "Client Secret" must never be pasted into a public web page where anyone could read it. The fix is a tiny piece of glue — a **Cloudflare Worker** — that sits between the app and Strava. You paste in one file, Cloudflare hosts it for free, and it keeps your secret safe while letting the page work.
+Browsers aren't allowed to call Strava's or Whoop's servers directly for security reasons (neither sends back the permission headers a browser requires), and a Client Secret must never be pasted into a public web page where anyone could read it. The fix is a tiny piece of glue — a **Cloudflare Worker** — that sits between the app and Strava/Whoop. You paste in one file, Cloudflare hosts it for free, and it keeps your secrets safe while letting the page work. The same Worker handles both — you don't need two.
 
 ---
 
@@ -62,13 +63,30 @@ Without this, each device (phone, laptop) has its own separate copy of everythin
 
 That's it — from now on, every change auto-saves to your Worker, and opening the app pulls the latest before showing anything. If you ever need to double-check it's caught up, tap **Pull latest now**.
 
-## 6. Connect everything in the app
+## 6. Connect Whoop (optional)
+
+This feeds your daily recovery score, HRV, resting heart rate, and strain into the coach, so it can back off proactively on a bad-recovery week instead of only reacting after the fact from how sessions felt.
+
+1. Go to <https://developer.whoop.com/> and sign in with your Whoop account.
+2. Create a new app. Give it any name. When asked for **scopes**, select: `read:recovery`, `read:cycles`, `read:sleep`, `read:profile`, `read:workout`, and `offline` (offline is what lets the app keep syncing without you re-approving constantly).
+3. For the **Redirect URI**, enter the exact URL of your hosted page (e.g. `https://your-username.github.io/breathing-app/training-plan.html`) — this must match exactly, including `https://`.
+4. Create the app. Copy the **Client ID** and **Client Secret**.
+5. Back in your Cloudflare Worker (the same one from step 3) → **Settings → Variables and Secrets**, add:
+   - `WHOOP_CLIENT_ID` = the Client ID
+   - `WHOOP_CLIENT_SECRET` = the Client Secret (tick "Encrypt")
+6. Click **Edit code** and re-paste the full current contents of `strava-worker.js` (it now also handles Whoop's OAuth and API calls). Deploy.
+7. In the app, Settings → **Whoop** → paste your Client ID → **Save settings** → **Connect Whoop** → approve access.
+
+The first sync pulls your last 90 days of recovery and strain data automatically — no need to re-upload an export.
+
+## 7. Connect everything in the app
 
 Open `training-plan.html` (your GitHub Pages URL, or the local file) and go to the **Settings** tab:
 
 - Paste your **Strava Client ID** and your **Worker URL** (from steps 2 and 3), then tap **Save settings**, then **Connect Strava** and approve access.
 - Paste your **Anthropic API key** (from step 4).
 - If you set up sync (step 5), enter your sync passphrase too.
+- If you set up Whoop (step 6), connect it here too.
 - Fill in your equipment list, bodyweight (optional), and any notes for your coach (injuries, preferences, etc.).
 - Save settings.
 
@@ -81,7 +99,7 @@ You're set up. Go to **Today** or **Week** and tap **Generate This Week's Plan**
 - The app follows a fixed weekly shape: **Mon/Fri gym, Tue/Thu/Sun run** (Tue is always your easy trail run with Bob, Thu is the quality session, Sun is the long run) — everything else about the plan is written fresh each week by Claude, based on your recent Strava runs and logged gym sessions.
 - Log gym sessions by typing them in, snapping a photo of your notes/whiteboard, or jotting free text — Claude reads it into structured sets/reps/weight for you to confirm.
 - Runs sync automatically from Strava and match themselves to the right day.
-- Do a quick daily check-in (sleep/soreness/energy) on the Today tab — the plan generator uses it to back off when you're run down.
+- If Whoop is connected, your recovery score shows on the Today tab and feeds directly into plan generation — no daily input needed on your end.
 - Tap **Regenerate** on the Week tab any time you want a fresh plan (e.g. after a bad night's sleep or a missed session) — you can add a note like "sore knee" or "short on time this week" and it'll adjust.
 
 ## Troubleshooting
@@ -90,4 +108,6 @@ You're set up. Go to **Today** or **Week** and tap **Generate This Week's Plan**
 - **Strava login redirects but nothing happens**: your Strava app's "Authorization Callback Domain" (step 2) must exactly match the domain you're opening the page from.
 - **Claude errors mentioning your API key**: check the key was copied in full and that your Anthropic account has billing/credit set up.
 - **Sync says "error" or a device isn't picking up changes**: the passphrase has to match *exactly* on every device — retype it rather than assume it copy-pasted cleanly. Also confirm the Worker has both the `DATA_KV` binding and the `SYNC_SECRET` variable set (Worker → Settings → Bindings / Variables and Secrets) and was redeployed after adding them.
+- **"Whoop connect failed"**: check the Redirect URI in your Whoop developer app matches your hosted page's URL *exactly* (including `https://`), and that both `WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` are set on the Worker and it was redeployed after adding them — same idea as the Strava troubleshooting above.
+- **A Strava or Whoop error message looks like garbled JSON**: that's intentional — the app shows you the exact error the Worker got back so you (or I, if you paste it back) can pinpoint the problem, rather than a vague "something went wrong."
 - Nothing here ever needs a terminal, `git`, or installing software — if a step is asking you to do that, something's gone off track.

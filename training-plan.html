@@ -243,7 +243,7 @@ const CLAUDE_MODEL = 'claude-sonnet-5';
 /* ============================================================
    STORAGE
    ============================================================ */
-const SYNC_KEYS = ['settings', 'weeks', 'gymLogs', 'stravaCache'];
+const SYNC_KEYS = ['settings', 'weeks', 'gymLogs', 'stravaCache', 'whoopCache'];
 let _applyingRemoteSync = false; // guards against a pull immediately re-triggering a push
 const S = {
   get(k, def) { try { const v = localStorage.getItem('tp_' + k); return v !== null ? JSON.parse(v) : def; } catch { return def; } },
@@ -258,6 +258,8 @@ function defaultSettings() {
     stravaClientId: '', workerUrl: '',
     stravaAccessToken: '', stravaRefreshToken: '', stravaTokenExpiresAt: 0,
     stravaAthlete: null,
+    whoopClientId: '',
+    whoopAccessToken: '', whoopRefreshToken: '', whoopTokenExpiresAt: 0,
     anthropicApiKey: '',
     syncSecret: '',
     equipment: DEFAULT_EQUIPMENT.slice(),
@@ -410,11 +412,26 @@ function disconnectStrava() {
   s.stravaAccessToken = ''; s.stravaRefreshToken = ''; s.stravaTokenExpiresAt = 0; s.stravaAthlete = null;
   setSettings(s); renderSettings();
 }
+// Both Strava and Whoop redirect back to this same page with a ?code=.
+// The `state` param (only Whoop's connect flow sets one, checked against
+// what we stashed in sessionStorage before redirecting) is what tells us
+// which provider's callback this is.
 async function handleOAuthRedirect() {
   const params = new URLSearchParams(location.search);
   const code = params.get('code');
-  if (!code) return false;
+  const state = params.get('state');
+  if (!code) return { strava: false, whoop: false };
   history.replaceState({}, '', cleanRedirectUri());
+  const expectedWhoopState = sessionStorage.getItem('tp_whoop_oauth_state');
+  sessionStorage.removeItem('tp_whoop_oauth_state');
+  if (state && expectedWhoopState && state === expectedWhoopState) {
+    const ok = await handleWhoopOAuthCallback(code);
+    return { strava: false, whoop: ok };
+  }
+  const ok = await handleStravaOAuthCallback(code);
+  return { strava: ok, whoop: false };
+}
+async function handleStravaOAuthCallback(code) {
   const s = getSettings();
   if (!s.workerUrl) { toast('Strava code received, but Worker URL is not set'); return false; }
   try {
@@ -520,6 +537,135 @@ function matchStravaToWeeks() {
 }
 
 /* ============================================================
+   WHOOP — recovery/HRV/RHR/strain, feeding the fatigue signals the
+   coach reasons about. Same proxy-Worker pattern as Strava, on its own
+   /whoop/* routes; the two are independent, either can be connected
+   without the other.
+   ============================================================ */
+function whoopConnected() { const s = getSettings(); return !!s.whoopAccessToken; }
+function connectWhoop() {
+  const s = getSettings();
+  if (!s.whoopClientId || !s.workerUrl) { toast('Add your Whoop Client ID and Worker URL in Settings first'); return; }
+  const state = uid();
+  sessionStorage.setItem('tp_whoop_oauth_state', state);
+  const redirect = encodeURIComponent(cleanRedirectUri());
+  const scope = encodeURIComponent('offline read:recovery read:cycles read:sleep read:profile read:workout');
+  const url = `https://api.prod.whoop.com/oauth/oauth2/auth?client_id=${encodeURIComponent(s.whoopClientId)}&response_type=code&redirect_uri=${redirect}&scope=${scope}&state=${state}`;
+  location.href = url;
+}
+function disconnectWhoop() {
+  const s = getSettings();
+  s.whoopAccessToken = ''; s.whoopRefreshToken = ''; s.whoopTokenExpiresAt = 0;
+  setSettings(s); renderSettings();
+}
+async function handleWhoopOAuthCallback(code) {
+  const s = getSettings();
+  if (!s.workerUrl) { toast('Whoop code received, but Worker URL is not set'); return false; }
+  try {
+    const resp = await fetch(s.workerUrl.replace(/\/$/, '') + '/whoop/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'authorization_code', code, redirect_uri: cleanRedirectUri() }),
+    });
+    if (!resp.ok) throw new Error(await describeWhoopError(resp));
+    const data = await resp.json();
+    applyWhoopTokens(data);
+    toast('Whoop connected ✓');
+    return true;
+  } catch (err) {
+    toast('Whoop connect failed: ' + err.message);
+    return false;
+  }
+}
+async function describeWhoopError(resp) {
+  let bodyText = '';
+  try { bodyText = await resp.text(); } catch {}
+  try {
+    const j = JSON.parse(bodyText);
+    const msg = j.message || j.error_description || j.error;
+    if (msg) {
+      const d = j._debug;
+      const dbg = d ? ` [worker sent client_id=${d.clientIdPreview || 'MISSING'} (len ${d.clientIdLength}), secret set=${d.clientSecretSet} (len ${d.clientSecretLength}), redirect_uri=${d.redirectUriSent || 'none'}]` : '';
+      return `Whoop error ${resp.status}: ${msg}${dbg}`;
+    }
+  } catch {}
+  return `Whoop error ${resp.status}${bodyText ? ': ' + bodyText.slice(0, 200) : ''}`;
+}
+function applyWhoopTokens(data) {
+  const s = getSettings();
+  s.whoopAccessToken = data.access_token;
+  s.whoopRefreshToken = data.refresh_token || s.whoopRefreshToken;
+  s.whoopTokenExpiresAt = data.expires_in ? Math.floor(Date.now() / 1000) + data.expires_in : 0;
+  setSettings(s);
+}
+async function ensureWhoopToken() {
+  const s = getSettings();
+  if (!s.whoopAccessToken) throw new Error('Whoop not connected');
+  const now = Math.floor(Date.now() / 1000);
+  if (s.whoopTokenExpiresAt - now > 120) return s.whoopAccessToken;
+  const resp = await fetch(s.workerUrl.replace(/\/$/, '') + '/whoop/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: s.whoopRefreshToken }),
+  });
+  if (!resp.ok) throw new Error(await describeWhoopError(resp));
+  const data = await resp.json();
+  applyWhoopTokens(data);
+  return data.access_token;
+}
+// Whoop's collection endpoints are paginated (next_token); follow it up to
+// a page cap so a long history can't turn into a runaway fetch loop.
+async function fetchWhoopPaginated(path, params, maxPages) {
+  const s = getSettings();
+  const token = await ensureWhoopToken();
+  const records = [];
+  let nextToken = null;
+  for (let page = 0; page < (maxPages || 6); page++) {
+    const qs = new URLSearchParams({ ...params, limit: '25' });
+    if (nextToken) qs.set('next_token', nextToken);
+    const url = `${s.workerUrl.replace(/\/$/, '')}/whoop/api${path}?${qs.toString()}`;
+    const resp = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!resp.ok) throw new Error(await describeWhoopError(resp));
+    const data = await resp.json();
+    records.push(...(data.records || []));
+    nextToken = data.next_token;
+    if (!nextToken) break;
+  }
+  return records;
+}
+async function syncWhoop(silent) {
+  if (!whoopConnected()) { if (!silent) toast('Connect Whoop first'); return; }
+  try {
+    const start = new Date(Date.now() - 90 * 86400000).toISOString();
+    const [recoveries, cycles] = await Promise.all([
+      fetchWhoopPaginated('/v2/recovery', { start }),
+      fetchWhoopPaginated('/v2/cycle', { start }),
+    ]);
+    const cache = S.get('whoopCache', []);
+    const byDate = new Map(cache.map(d => [d.date, d]));
+    for (const r of recoveries) {
+      if (!r.created_at || !r.score) continue;
+      const date = r.created_at.slice(0, 10);
+      byDate.set(date, {
+        ...(byDate.get(date) || { date }),
+        recoveryScore: r.score.recovery_score ?? null,
+        restingHr: r.score.resting_heart_rate ?? null,
+        hrv: r.score.hrv_rmssd_milli ?? null,
+      });
+    }
+    for (const c of cycles) {
+      if (!c.start || !c.score) continue;
+      const date = c.start.slice(0, 10);
+      byDate.set(date, { ...(byDate.get(date) || { date }), dayStrain: c.score.strain ?? null });
+    }
+    const merged = Array.from(byDate.values()).sort((a, b) => b.date.localeCompare(a.date));
+    S.set('whoopCache', merged);
+    if (!silent) toast(`Synced ${recoveries.length} recovery + ${cycles.length} strain days from Whoop`);
+    renderAll();
+  } catch (err) {
+    if (!silent) toast('Whoop sync error: ' + err.message);
+  }
+}
+
+/* ============================================================
    CLAUDE
    ============================================================ */
 async function callClaude({ system, content, maxTokens }) {
@@ -599,6 +745,12 @@ PERIODIZATION (the context gives you programWeek, weekInBlock, and isDeloadWeek 
 - recentWeeksSummary gives you up to the last 4 weeks of sessions with their status (done/planned/etc). Look for adherence patterns — e.g. a particular session type repeatedly left "planned" rather than "done" — and note it in the rationale if you spot one; adjust rather than just repeating a session type that keeps getting skipped.
 - unresolvedFromLastWeek lists specific sessions from the week immediately prior that were never marked done — these are recent enough to be real, actionable misses, not just old history. Address them explicitly: for an isolated miss, briefly acknowledge it and move on (don't just silently re-prescribe it as if nothing happened); if it lines up with a repeated pattern from recentWeeksSummary, treat that as a signal the schedule or intensity needs to change, not something to keep prescribing unchanged and hoping it sticks this time.
 
+RECOVERY (Whoop, when connected):
+- recentRecovery, when present, is daily Whoop data: recoveryScore (0-100, Whoop's own daily recovery score), restingHr, hrv (ms), and dayStrain (0-21, cumulative daily exertion). This is a direct physiological measurement, not an inferred proxy — when it's present, weight it above the RPE/soreness and running-pace-HR signals described below, though those are still useful supporting color (e.g. explaining why a low-recovery day happened).
+- Read it as a trend across the recent days, not a single reading: a recoveryScore trend below ~33 is a strong signal to cut volume/intensity that week (both gym and running); 34-66 is a caution, hold steady rather than push; 67+ is a green light to progress normally. A rising restingHr or falling hrv over several days, even with recoveryScore still okay, is an early warning worth noting.
+- Also look at dayStrain relative to recoveryScore the following day or two — consistently high strain followed by poor recovery is a sign the current volume is outrunning recovery capacity, independent of the scheduled deload cadence; call it out and adjust rather than waiting for the next scheduled deload week if it's a clear pattern.
+- If recentRecovery is empty or absent, fall back entirely to the RPE/soreness and running-pace-HR signals below — this is optional data, not a requirement.
+
 GYM PHILOSOPHY:
 - Powerlifting focus on the big three (squat, bench press, deadlift) plus an overhead/incline press, using only the athlete's available equipment (given in context).
 - Split the two sessions so squat/bench appear in one and deadlift/press in the other (rotate emphasis week to week).
@@ -665,6 +817,8 @@ async function generatePlan(extraNote) {
   const gymLogs = allGymLogs.filter(g => g.date >= cutoff).map(g => ({
     date: g.date, exercises: g.exercises.map(e => ({ name: e.name, sets: e.sets })), rpe: g.rpe, soreness: g.soreness,
   }));
+  const recentRecovery = S.get('whoopCache', []).filter(d => d.date >= cutoff)
+    .sort((a, b) => a.date.localeCompare(b.date));
   // Last 4 weeks (not just 1) so the coach can spot adherence patterns —
   // e.g. a session type repeatedly left "planned" rather than "done" —
   // instead of only ever seeing what happened immediately prior.
@@ -693,7 +847,7 @@ async function generatePlan(extraNote) {
       bodyweightKg: s.bodyweightKg || null, goal: s.goal, experienceLevel: s.experienceLevel,
       equipment: s.equipment, coachNotes: s.coachNotes || null,
     },
-    recentRuns, recentGymSessions: gymLogs, recentWeeksSummary, strengthTrends, unresolvedFromLastWeek,
+    recentRuns, recentGymSessions: gymLogs, recentWeeksSummary, strengthTrends, unresolvedFromLastWeek, recentRecovery,
     adjustmentRequest: extraNote || null,
   };
 
@@ -799,10 +953,15 @@ function renderToday(s) {
     return;
   }
   const todaySessions = week.sessions.filter(x => x.day === dow);
+  const whoopToday = S.get('whoopCache', []).find(d => d.date === today) || S.get('whoopCache', []).slice().sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const recoveryBadge = (whoopConnected() && whoopToday && whoopToday.recoveryScore != null)
+    ? `<span class="badge ${whoopToday.recoveryScore >= 67 ? 'badge-done' : whoopToday.recoveryScore >= 34 ? 'badge-warn' : 'badge-danger'}">${whoopToday.date === today ? 'Recovery' : 'Last recovery'} ${whoopToday.recoveryScore}%</span>`
+    : '';
   el.innerHTML = `
     <div class="card">
       <div class="sec-hdr"><span class="sec-title">${today} — ${dow}</span>
         <button class="btn btn-ghost btn-sm" onclick="syncStrava(false)">\u{1F504} Sync Strava</button></div>
+      ${recoveryBadge ? `<div class="flex gap-1 mt-1" style="margin-bottom:.6rem">${recoveryBadge}</div>` : ''}
       ${todaySessions.length ? todaySessions.map(sess => sessionCardHtml(sess, week)).join('<hr style="border-color:var(--border);margin:.75rem 0">') : `<p class="text-sm text-muted">Rest day. Recovery is training too.</p>`}
     </div>`;
   wireSessionCard(el);
@@ -1155,7 +1314,11 @@ function renderTrends(s) {
   const toPoints = lift => e1rmSessions(gymLogs, E1RM_LIFTS[lift]).map(s => ({ label: fmtDateShort(s.date), v: s.e1rm })).slice(-10);
   const squatSeries = toPoints('squat'), benchSeries = toPoints('bench'), deadliftSeries = toPoints('deadlift'), pressSeries = toPoints('press');
 
+  const whoop = S.get('whoopCache', []).slice().sort((a,b) => a.date.localeCompare(b.date));
+  const recoveryPoints = whoop.filter(d => d.recoveryScore != null).map(d => ({ label: fmtDateShort(d.date), v: d.recoveryScore })).slice(-14);
+
   el.innerHTML = `
+    ${whoopConnected() ? `<div class="card"><div class="sec-title mt-1">Whoop recovery % (last 14 days)</div>${svgLineChart(recoveryPoints)}</div>` : ''}
     <div class="card"><div class="sec-title mt-1">Weekly running mileage (km)</div>${svgBarChart(mileagePoints)}</div>
     <div class="card"><div class="sec-title mt-1">Long run pace (min/km, lower = faster)</div>${svgLineChart(paceLong)}</div>
     <div class="card"><div class="sec-title mt-1">Estimated squat 1RM (kg)</div>${svgLineChart(squatSeries)}</div>
@@ -1180,6 +1343,18 @@ function renderSettings(s) {
         <button class="btn btn-ghost btn-sm" id="syncStravaNowBtn">Sync Strava now</button>
       </div>
       <p class="text-xs text-muted mt-1">See TRAINING_PLAN_SETUP.md for how to create the Strava API app and deploy the Worker — no coding, just pasting into two dashboards.</p>
+    </div>
+    <div class="card">
+      <div class="sec-title">Whoop</div>
+      <p class="text-sm text-muted mt-1">Optional. Feeds your daily recovery score, HRV, resting heart rate, and strain into the coach so it can back off proactively instead of only reacting to how sessions felt afterward.</p>
+      <p class="status-pill mt-1"><span class="dot ${whoopConnected()?'ok':''}"></span>${whoopConnected() ? 'Connected' : 'Not connected'}</p>
+      <div class="field mt-1"><label>Whoop Client ID</label><input id="setWhoopClientId" value="${escapeHtml(s.whoopClientId)}" placeholder="from developer.whoop.com"></div>
+      <p class="text-xs text-muted">Uses the same Worker URL as Strava above.</p>
+      <div class="flex gap-1 mt-1">
+        ${whoopConnected() ? `<button class="btn btn-danger btn-sm" id="disconnectWhoopBtn">Disconnect</button>` : `<button class="btn btn-primary btn-sm" id="connectWhoopBtn">Connect Whoop</button>`}
+        <button class="btn btn-ghost btn-sm" id="syncWhoopNowBtn">Sync Whoop now</button>
+      </div>
+      <p class="text-xs text-muted mt-1">See TRAINING_PLAN_SETUP.md for how to create the Whoop developer app and add its credentials to the Worker.</p>
     </div>
     <div class="card">
       <div class="sec-title">Claude (plan generation &amp; photo/text analysis)</div>
@@ -1214,6 +1389,9 @@ function renderSettings(s) {
   const cb = document.getElementById('connectStravaBtn'); if (cb) cb.addEventListener('click', () => { saveSettingsFromForm(true); connectStrava(); });
   const db = document.getElementById('disconnectStravaBtn'); if (db) db.addEventListener('click', disconnectStrava);
   document.getElementById('syncStravaNowBtn').addEventListener('click', () => syncStrava(false));
+  const cwb = document.getElementById('connectWhoopBtn'); if (cwb) cwb.addEventListener('click', () => { saveSettingsFromForm(true); connectWhoop(); });
+  const dwb = document.getElementById('disconnectWhoopBtn'); if (dwb) dwb.addEventListener('click', disconnectWhoop);
+  document.getElementById('syncWhoopNowBtn').addEventListener('click', () => syncWhoop(false));
   document.getElementById('syncPullNowBtn').addEventListener('click', async () => {
     saveSettingsFromForm(true);
     if (!syncConfigured()) { toast('Add the Worker URL and a sync passphrase first'); return; }
@@ -1233,7 +1411,7 @@ function renderSettings(s) {
     if (!confirm('This deletes all local training data (plans, logs, Strava cache, and your saved keys) from this browser. Continue?')) return;
     const wasSynced = syncConfigured();
     const { workerUrl, syncSecret } = getSettings();
-    ['settings','weeks','gymLogs','checkins','stravaCache'].forEach(k => localStorage.removeItem('tp_' + k));
+    ['settings','weeks','gymLogs','checkins','stravaCache','whoopCache'].forEach(k => localStorage.removeItem('tp_' + k));
     if (wasSynced) {
       // Clear the remote copy too, or a synced device would just pull
       // everything straight back on its next load.
@@ -1252,6 +1430,7 @@ function saveSettingsFromForm(silent) {
   const s = getSettings();
   s.stravaClientId = document.getElementById('setClientId').value.trim();
   s.workerUrl = document.getElementById('setWorkerUrl').value.trim();
+  s.whoopClientId = document.getElementById('setWhoopClientId').value.trim();
   s.anthropicApiKey = document.getElementById('setApiKey').value.trim();
   s.syncSecret = document.getElementById('setSyncSecret').value.trim();
   s.bodyweightKg = document.getElementById('setBodyweight').value.trim();
@@ -1268,9 +1447,9 @@ function saveSettingsFromForm(silent) {
    ============================================================ */
 async function init() {
   buildNav();
-  const justConnectedStrava = await handleOAuthRedirect();
+  const justConnected = await handleOAuthRedirect();
   if (syncConfigured()) {
-    if (justConnectedStrava) {
+    if (justConnected.strava || justConnected.whoop) {
       // Local state (the tokens just obtained) is newer than whatever's
       // remote — push it instead of pulling, or a pull here would clobber
       // the fresh tokens with stale remote data.
@@ -1283,6 +1462,7 @@ async function init() {
   const s = getSettings();
   if (s.onboarded) switchTab('today'); else switchTab('settings');
   if (stravaConnected()) syncStrava(true);
+  if (whoopConnected()) syncWhoop(true);
 }
 init();
 </script>

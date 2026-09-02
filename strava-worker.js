@@ -1,13 +1,13 @@
 /**
- * Strava proxy + cross-device sync store for the Training Plan app.
+ * Strava + Whoop proxy, plus cross-device sync store, for the Training Plan app.
  *
- * Why this file exists: browsers are not allowed to call Strava's API
- * directly (Strava does not send the CORS headers a browser requires,
- * and the OAuth token exchange needs your Client Secret, which must never
- * be shipped inside a public web page). This tiny Cloudflare Worker sits
- * in between: the app talks to this Worker, and this Worker talks to
- * Strava on its behalf, adding the CORS headers the browser needs and
- * keeping your Client Secret out of the page entirely.
+ * Why this file exists: browsers are not allowed to call Strava's or
+ * Whoop's APIs directly (neither sends the CORS headers a browser
+ * requires, and both OAuth token exchanges need a Client Secret, which
+ * must never be shipped inside a public web page). This tiny Cloudflare
+ * Worker sits in between: the app talks to this Worker, and this Worker
+ * talks to Strava/Whoop on its behalf, adding the CORS headers the
+ * browser needs and keeping your Client Secrets out of the page entirely.
  *
  * It also doubles as a tiny sync store: the app pushes its full local
  * state (settings, plans, logs) here after every change and pulls it on
@@ -17,6 +17,8 @@
  * You do not need to write or understand this code. Deploy it by pasting
  * it into the Cloudflare dashboard (see TRAINING_PLAN_SETUP.md) and set:
  *   - STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET (environment variables)
+ *   - WHOOP_CLIENT_ID / WHOOP_CLIENT_SECRET (environment variables, only
+ *     needed if you're connecting Whoop)
  *   - SYNC_SECRET (an environment variable — a passphrase you make up;
  *     mark it "Encrypt". Enter the same passphrase in the app's Settings
  *     on every device you use.)
@@ -27,6 +29,8 @@
 
 const STRAVA_API = 'https://www.strava.com/api/v3';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
+const WHOOP_API = 'https://api.prod.whoop.com/developer';
+const WHOOP_TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 const SYNC_KV_KEY = 'training-plan-data';
 
 function withCors(resp, origin) {
@@ -133,6 +137,66 @@ async function handleApiProxy(request, env, origin, pathname) {
   return withCors(stravaResp, origin);
 }
 
+async function handleWhoopTokenExchange(request, env, origin) {
+  const body = await request.json();
+  const clientId = (env.WHOOP_CLIENT_ID || '').trim();
+  const clientSecret = (env.WHOOP_CLIENT_SECRET || '').trim();
+  const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret });
+
+  if (body.grant_type === 'refresh_token') {
+    params.set('grant_type', 'refresh_token');
+    params.set('refresh_token', body.refresh_token);
+    params.set('scope', 'offline read:recovery read:cycles read:sleep read:profile read:workout');
+  } else {
+    params.set('grant_type', 'authorization_code');
+    params.set('code', body.code);
+    // Whoop, unlike Strava, requires redirect_uri again on the token
+    // exchange — it must match what was sent to the authorize step.
+    params.set('redirect_uri', body.redirect_uri || '');
+  }
+
+  const whoopResp = await fetch(WHOOP_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+
+  if (!whoopResp.ok) {
+    const text = await whoopResp.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = { message: text }; }
+    parsed._debug = {
+      clientIdSet: clientId.length > 0,
+      clientIdLength: clientId.length,
+      clientIdPreview: clientId ? `${clientId.slice(0, 2)}…${clientId.slice(-2)}` : null,
+      clientSecretSet: clientSecret.length > 0,
+      clientSecretLength: clientSecret.length,
+      grantType: params.get('grant_type'),
+      redirectUriSent: params.get('redirect_uri') || null,
+    };
+    return withCors(new Response(JSON.stringify(parsed), {
+      status: whoopResp.status,
+      headers: { 'Content-Type': 'application/json' },
+    }), origin);
+  }
+
+  return withCors(whoopResp, origin);
+}
+
+async function handleWhoopApiProxy(request, env, origin, pathname) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader) {
+    return withCors(new Response('Missing Authorization header', { status: 401 }), origin);
+  }
+  const url = new URL(request.url);
+  const target = WHOOP_API + pathname.replace(/^\/whoop\/api/, '') + url.search;
+  const whoopResp = await fetch(target, {
+    method: 'GET',
+    headers: { Authorization: authHeader },
+  });
+  return withCors(whoopResp, origin);
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '*';
@@ -148,6 +212,12 @@ export default {
       }
       if (url.pathname.startsWith('/api/') && request.method === 'GET') {
         return await handleApiProxy(request, env, origin, url.pathname);
+      }
+      if (url.pathname === '/whoop/token' && request.method === 'POST') {
+        return await handleWhoopTokenExchange(request, env, origin);
+      }
+      if (url.pathname.startsWith('/whoop/api/') && request.method === 'GET') {
+        return await handleWhoopApiProxy(request, env, origin, url.pathname);
       }
       if (url.pathname === '/sync' && request.method === 'GET') {
         return await handleSyncGet(request, env, origin);
