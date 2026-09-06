@@ -796,12 +796,26 @@ function programWeekOf(weekStartIso, firstWeekStartIso) {
   return { programWeek, weekInBlock, isDeloadWeek: weekInBlock === 4 };
 }
 
-async function generatePlan(extraNote) {
+async function generatePlan(weekStartIso, extraNote) {
   const s = getSettings();
   const weeks = getWeeks();
-  const lastWeek = weeks[weeks.length - 1];
-  const nextMonday = lastWeek ? new Date(parseISO(lastWeek.weekStart).getTime() + 7*86400000) : mondayOf(new Date());
-  const weekStartIso = toISODate(mondayOf(nextMonday));
+  // weekStartIso is always passed explicitly by callers now (current week,
+  // next week, or whichever week is being regenerated) — falling back to
+  // "last stored week + 7 days" here is only a safety net for stale calls,
+  // and deliberately not used to decide what "next week" means: after a
+  // gap in usage, the last stored week could be arbitrarily old, so that
+  // math would silently generate a week that doesn't match today's actual
+  // current/next Monday and never show up on the Today tab.
+  if (!weekStartIso) {
+    const lastWeek = weeks[weeks.length - 1];
+    const nextMonday = lastWeek ? new Date(parseISO(lastWeek.weekStart).getTime() + 7*86400000) : mondayOf(new Date());
+    weekStartIso = toISODate(mondayOf(nextMonday));
+  }
+  // The week immediately preceding the one being generated, by date — not
+  // just weeks[weeks.length-1] — so regenerating an out-of-order week (e.g.
+  // the current week, after a future week already exists) still looks back
+  // at the right prior week for adherence/unresolved-session context.
+  const lastWeek = weeks.filter(w => w.weekStart < weekStartIso).sort((a,b) => a.weekStart.localeCompare(b.weekStart)).pop() || null;
   const firstWeekStartIso = weeks.length ? weeks[0].weekStart : weekStartIso;
   const programInfo = programWeekOf(weekStartIso, firstWeekStartIso);
 
@@ -822,7 +836,7 @@ async function generatePlan(extraNote) {
   // Last 4 weeks (not just 1) so the coach can spot adherence patterns —
   // e.g. a session type repeatedly left "planned" rather than "done" —
   // instead of only ever seeing what happened immediately prior.
-  const recentWeeksSummary = weeks.slice(-4).map(w => ({
+  const recentWeeksSummary = weeks.filter(w => w.weekStart < weekStartIso).slice(-4).map(w => ({
     weekStart: w.weekStart,
     ...programWeekOf(w.weekStart, firstWeekStartIso),
     sessions: w.sessions.map(x => ({ day: x.day, type: x.type, title: x.title, status: x.status })),
@@ -949,7 +963,7 @@ function renderToday(s) {
     el.innerHTML = `<div class="card empty"><div class="ico">\u{1F3CB}</div><div>No plan for this week yet</div>
       <p class="text-xs mt-1">Generate one from your recent training data</p>
       <button class="btn btn-primary mt-2" id="genFirstPlan">Generate This Week's Plan</button></div>`;
-    document.getElementById('genFirstPlan').addEventListener('click', () => runGeneratePlan());
+    document.getElementById('genFirstPlan').addEventListener('click', () => runGeneratePlan(toISODate(mondayOf(new Date()))));
     return;
   }
   const todaySessions = week.sessions.filter(x => x.day === dow);
@@ -957,14 +971,23 @@ function renderToday(s) {
   const recoveryBadge = (whoopConnected() && whoopToday && whoopToday.recoveryScore != null)
     ? `<span class="badge ${whoopToday.recoveryScore >= 67 ? 'badge-done' : whoopToday.recoveryScore >= 34 ? 'badge-warn' : 'badge-danger'}">${whoopToday.date === today ? 'Recovery' : 'Last recovery'} ${whoopToday.recoveryScore}%</span>`
     : '';
+  // There's no automatic generation — nudge on the last day of the fixed
+  // Mon-Sun structure, since that's when the coach has the fullest picture
+  // of the week just finished to write the next one from.
+  const nextMonday = toISODate(mondayOf(new Date(Date.now() + 86400000)));
+  const nextWeekReady = dow === 'Sun' && !getWeeks().find(w => w.weekStart === nextMonday);
   el.innerHTML = `
     <div class="card">
       <div class="sec-hdr"><span class="sec-title">${today} — ${dow}</span>
         <button class="btn btn-ghost btn-sm" onclick="syncStrava(false)">\u{1F504} Sync Strava</button></div>
       ${recoveryBadge ? `<div class="flex gap-1 mt-1" style="margin-bottom:.6rem">${recoveryBadge}</div>` : ''}
       ${todaySessions.length ? todaySessions.map(sess => sessionCardHtml(sess, week)).join('<hr style="border-color:var(--border);margin:.75rem 0">') : `<p class="text-sm text-muted">Rest day. Recovery is training too.</p>`}
-    </div>`;
+    </div>
+    ${nextWeekReady ? `<div class="card"><div class="sec-title">Plan next week</div>
+      <p class="text-sm text-muted mt-1">This week's done — generate next week's plan whenever you're ready (it's never automatic).</p>
+      <button class="btn btn-primary mt-2" id="genNextWeekBtn">Generate Next Week's Plan</button></div>` : ''}`;
   wireSessionCard(el);
+  if (nextWeekReady) document.getElementById('genNextWeekBtn').addEventListener('click', () => runGeneratePlan(nextMonday));
 }
 function sessionCardHtml(sess, week) {
   const badge = sess.type === 'gym' ? '<span class="badge badge-gym">Gym</span>' : '<span class="badge badge-run">Run</span>';
@@ -1035,14 +1058,41 @@ function wireSessionCard(root) {
 /* ============================================================
    WEEK TAB
    ============================================================ */
+// Which week the Week tab is currently showing. Defaults to "this calendar
+// week" (not just "whatever was generated last") so opening the tab always
+// orients around today; Prev/Next let you look at other weeks without
+// losing that anchor.
+let viewedWeekStart = null;
+function shiftIso(iso, days) { return toISODate(new Date(parseISO(iso).getTime() + days*86400000)); }
 function renderWeek(s) {
   const el = document.getElementById('tab-week');
   const weeks = getWeeks();
-  const week = weeks[weeks.length - 1];
+  const todayMonday = toISODate(mondayOf(new Date()));
+  if (!viewedWeekStart) {
+    viewedWeekStart = weeks.find(w => w.weekStart === todayMonday) ? todayMonday
+      : (weeks.length ? weeks[weeks.length - 1].weekStart : todayMonday);
+  }
+  const week = weeks.find(w => w.weekStart === viewedWeekStart);
+  const label = viewedWeekStart === todayMonday ? 'This week'
+    : viewedWeekStart === shiftIso(todayMonday, 7) ? 'Next week'
+    : viewedWeekStart < todayMonday ? 'Past week' : 'Future week';
+  const nav = `<div class="flex gap-1" style="align-items:center;justify-content:space-between;margin-bottom:.5rem">
+      <button class="btn btn-ghost btn-sm" id="prevWeekBtn">‹ Prev</button>
+      <span class="text-xs text-muted">${label}</span>
+      <button class="btn btn-ghost btn-sm" id="nextWeekBtn">Next ›</button>
+    </div>`;
+  function wireNav() {
+    document.getElementById('prevWeekBtn').addEventListener('click', () => { viewedWeekStart = shiftIso(viewedWeekStart, -7); renderWeek(getSettings()); });
+    document.getElementById('nextWeekBtn').addEventListener('click', () => { viewedWeekStart = shiftIso(viewedWeekStart, 7); renderWeek(getSettings()); });
+  }
   if (!week) {
-    el.innerHTML = `<div class="card empty"><div class="ico">\u{1F4CB}</div><div>No plan yet</div>
-      <button class="btn btn-primary mt-2" id="genPlanBtn2">Generate This Week's Plan</button></div>`;
-    document.getElementById('genPlanBtn2').addEventListener('click', () => runGeneratePlan());
+    const genLabel = viewedWeekStart === todayMonday ? "Generate This Week's Plan"
+      : viewedWeekStart === shiftIso(todayMonday, 7) ? "Generate Next Week's Plan"
+      : `Generate Plan for ${fmtDateShort(viewedWeekStart)}`;
+    el.innerHTML = `${nav}<div class="card empty"><div class="ico">\u{1F4CB}</div><div>No plan for ${fmtDateShort(viewedWeekStart)}</div>
+      <button class="btn btn-primary mt-2" id="genPlanBtn2">${genLabel}</button></div>`;
+    document.getElementById('genPlanBtn2').addEventListener('click', () => runGeneratePlan(viewedWeekStart));
+    wireNav();
     return;
   }
   const rows = WEEK_DAYS.map(day => {
@@ -1059,7 +1109,7 @@ function renderWeek(s) {
   }).join('');
   const info = (week.programWeek != null) ? week : { ...week, ...programWeekOf(week.weekStart, weeks[0].weekStart) };
   const weekBadge = `<span class="badge badge-accent">Week ${info.programWeek}</span>${info.isDeloadWeek ? ' <span class="badge badge-warn">Deload</span>' : ''}`;
-  el.innerHTML = `
+  el.innerHTML = `${nav}
     <div class="card">
       <div class="sec-hdr"><span class="sec-title">Week of ${fmtDateShort(week.weekStart)}</span>
         <button class="btn btn-ghost btn-sm" id="regenBtn">\u{1F504} Regenerate</button></div>
@@ -1069,8 +1119,9 @@ function renderWeek(s) {
     <div class="card"><div class="sec-title mt-1">Coach note</div><p class="pre">${escapeHtml(week.rationale||'')}</p></div>`;
   document.getElementById('regenBtn').addEventListener('click', () => {
     const note = prompt('Anything to factor in for this week (optional)? e.g. sore knee, travelling, short on time');
-    runGeneratePlan(note || undefined);
+    runGeneratePlan(week.weekStart, note || undefined);
   });
+  wireNav();
   el.querySelectorAll('.day-row[data-session-id]').forEach(r => r.addEventListener('click', () => {
     const found = findSessionById(r.dataset.sessionId);
     if (found) openDayDetailModal(found.sess, found.week);
@@ -1085,13 +1136,14 @@ function openDayDetailModal(sess, week) {
   document.getElementById('logModalBody').querySelectorAll('.log-gym-btn, .mark-done-btn, .move-day-btn').forEach(b =>
     b.addEventListener('click', () => setTimeout(closeModal, 50)));
 }
-async function runGeneratePlan(note) {
+async function runGeneratePlan(weekStartIso, note) {
   const s = getSettings();
   if (!s.anthropicApiKey) { toast('Add your Anthropic API key in Settings first'); switchTab('settings'); return; }
   toast('Generating plan…');
   try {
-    await generatePlan(note);
+    await generatePlan(weekStartIso, note);
     toast('New plan ready \u{1F4AA}');
+    if (weekStartIso) viewedWeekStart = weekStartIso;
     switchTab('week');
   } catch (err) {
     toast('Plan generation failed: ' + err.message);
