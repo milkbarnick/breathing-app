@@ -100,7 +100,9 @@ You're set up. Go to **Today** or **Week** and tap **Generate This Week's Plan**
 - Log gym sessions by typing them in, snapping a photo of your notes/whiteboard, or jotting free text — Claude reads it into structured sets/reps/weight for you to confirm.
 - Runs sync automatically from Strava and match themselves to the right day.
 - If Whoop is connected, your recovery score shows on the Today tab and feeds directly into plan generation — no daily input needed on your end.
-- Tap **Regenerate** on the Week tab any time you want a fresh plan (e.g. after a bad night's sleep or a missed session) — you can add a note like "sore knee" or "short on time this week" and it'll adjust.
+- Tap **Regenerate** on the Week tab any time you want a fresh plan (e.g. after a bad night's sleep or a missed session) — you can add a note like "sore knee" or "short on time this week" and it'll adjust. Regenerate always rewrites whichever week you're currently viewing, in place.
+- Generation is never automatic — nothing writes next week's plan for you overnight. On the Today tab, once you hit Sunday (the last day of the fixed weekly structure), a **Generate Next Week's Plan** button appears there; tapping it (or using ‹ Prev / Next › on the Week tab to move to next week and generating from there) creates it. Until you do, next week just won't exist yet — that's expected, not a bug.
+- The Week tab always opens on *this* calendar week and lets you page forward/back with ‹ Prev / Next › — it no longer just shows "whatever was generated most recently," so it stays correct even if you skip a week or generate out of order.
 
 ## Troubleshooting
 
