@@ -93,15 +93,16 @@ Client-writable fields: `title, destination, startDate, endDate, timeZone, cover
 ### `GET /v1/health` → `200 { "ok": true, "version": "1" }`
 
 ### `POST /v1/auth/apple`
-Request: `{ "identityToken": "<JWT from Sign in with Apple>", "displayName": "Nick" | null }`
+Request: `{ "identityToken": "<JWT from Sign in with Apple>", "authorizationCode": "<code from Sign in with Apple>" | null, "displayName": "Nick" | null }`
 The server verifies the JWT against Apple's JWKS (`iss` = `https://appleid.apple.com`, `aud` = env `APPLE_BUNDLE_ID`, not expired).
-It upserts the user by Apple `sub`. `displayName` is only saved when provided (Apple sends the name only on first sign-in).
+It upserts the user by Apple `sub`. When `authorizationCode` is present, the server exchanges it at `https://appleid.apple.com/auth/token` (client secret = ES256 JWT signed with the Sign in with Apple key: env `APPLE_TEAM_ID`, `APPLE_SIWA_KEY_ID`, secret `APPLE_SIWA_PRIVATE_KEY`) and stores the returned `refresh_token` (needed for revocation on account deletion). A failed exchange is logged but does not fail sign-in.
+`displayName` is only saved when provided (Apple sends the name only on first sign-in).
 Response `200`: `{ "token": "opaque-session-token", "user": User }`
 
 ### `GET /v1/me` → `200 User`
 ### `PATCH /v1/me` body `{ "displayName": "..." }` → `200 User`
 ### `DELETE /v1/me` → `204`
-Deletes the account and all data the user owns, and removes them from shared trips. **Required by App Store Review Guideline 5.1.1(v).**
+Deletes the account and all data the user owns, and removes them from shared trips. It also revokes the stored Apple refresh token via `https://appleid.apple.com/auth/revoke` (best effort, before the rows are deleted). **Required by App Store Review Guideline 5.1.1(v)** and Apple's Sign in with Apple token-revocation requirement.
 
 ### `POST /v1/auth/logout` → `204` (revokes the current session token)
 
@@ -144,6 +145,7 @@ AI import. Request: `{ "text": "pasted confirmation email or notes, ≤ 20,000 c
 The server calls the Anthropic API (key in env `ANTHROPIC_API_KEY`) and returns **draft** items. Nothing is saved. The client shows them for review, then PUTs the ones the user accepts.
 Response `200 { "items": [ItemDraft] }`, where `ItemDraft` = the Item writable fields minus `id`, `tripId`, `sortIndex`.
 Rate limit: 30 imports per user per day → `429 rate_limited`.
+The client must get a one-time, explicit in-app consent before the first import ("Pasted text is sent to Anthropic to extract your plans"), per Guideline 5.1.2. The consent lives on the client only; the server does not check it.
 
 ## Server-initiated push notifications (APNs)
 
