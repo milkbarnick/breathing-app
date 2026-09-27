@@ -186,6 +186,14 @@ describe('auth and account', () => {
     expect((await call('POST', '/v1/auth/logout', { token: a.token })).status).toBe(204);
     expect((await call('GET', '/v1/me', { token: a.token })).status).toBe(401);
   });
+
+  it('logout with apnsToken unregisters only that device of that user', async () => {
+    const { a, b } = await sharedTrip();
+    expect((await call('POST', '/v1/auth/logout', { token: b.token, body: { apnsToken: TOKEN_A } })).status).toBe(204);
+    expect(await env.DB.prepare('SELECT * FROM devices WHERE apns_token = ?').bind(TOKEN_A).first()).not.toBeNull();
+    expect((await call('POST', '/v1/auth/logout', { token: a.token, body: { apnsToken: TOKEN_A } })).status).toBe(204);
+    expect(await env.DB.prepare('SELECT * FROM devices WHERE apns_token = ?').bind(TOKEN_A).first()).toBeNull();
+  });
 });
 
 describe('trips and items', () => {

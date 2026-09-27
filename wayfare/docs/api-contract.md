@@ -104,7 +104,8 @@ Response `200`: `{ "token": "opaque-session-token", "user": User }`
 ### `DELETE /v1/me` → `204`
 Deletes the account and all data the user owns, and removes them from shared trips. It also revokes the stored Apple refresh token via `https://appleid.apple.com/auth/revoke` (best effort, before the rows are deleted). **Required by App Store Review Guideline 5.1.1(v)** and Apple's Sign in with Apple token-revocation requirement.
 
-### `POST /v1/auth/logout` → `204` (revokes the current session token)
+### `POST /v1/auth/logout` → `204`
+Revokes the current session token. Optional body `{ "apnsToken": "hex" }` also unregisters that device (if it belongs to the caller), so a signed-out phone stops receiving pushes. The client should always send it when it has a token.
 
 ### `PUT /v1/devices/current`
 Request: `{ "apnsToken": "hex", "environment": "sandbox" | "production", "timeZone": "America/New_York", "briefingEnabled": true, "briefingHour": 7, "collabAlertsEnabled": true }`

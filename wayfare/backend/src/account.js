@@ -56,9 +56,23 @@ export async function signInWithApple({ request, env, ctx }) {
   return json({ token, user: userJson(user) });
 }
 
-/** POST /v1/auth/logout */
-export async function logout({ env, tokenHash }) {
-  await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
+/**
+ * POST /v1/auth/logout. Optional body { apnsToken } also unregisters this
+ * phone, so a signed-out device stops receiving the user's pushes.
+ */
+export async function logout({ request, env, user, tokenHash }) {
+  let apnsToken = null;
+  try {
+    const body = JSON.parse((await request.text()) || '{}');
+    if (body && typeof body.apnsToken === 'string' && body.apnsToken.length <= 200) apnsToken = body.apnsToken;
+  } catch {
+    // An empty or malformed body still logs out.
+  }
+  const stmts = [env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash)];
+  if (apnsToken) {
+    stmts.push(env.DB.prepare('DELETE FROM devices WHERE apns_token = ?1 AND user_id = ?2').bind(apnsToken, user.id));
+  }
+  await env.DB.batch(stmts);
   return noContent();
 }
 
