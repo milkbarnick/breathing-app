@@ -1,0 +1,33 @@
+# Wayfare API Worker. See README.md for the click-by-click setup.
+name = "wayfare-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# The hourly job that sends the "Today in ..." morning briefings.
+[triggers]
+crons = ["0 * * * *"]
+
+# The database. Replace database_id with the id that
+# `npx wrangler d1 create wayfare` prints (README step 3).
+[[d1_databases]]
+binding = "DB"
+database_name = "wayfare"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Plain (non-secret) settings. Fill in your own Apple ids (README steps 4-5).
+[vars]
+APPLE_BUNDLE_ID = "com.wayfare.app"
+APNS_TOPIC = "com.wayfare.app"
+APNS_KEY_ID = "REPLACE_WITH_APNS_KEY_ID"
+APNS_TEAM_ID = "REPLACE_WITH_APPLE_TEAM_ID"
+APPLE_TEAM_ID = "REPLACE_WITH_APPLE_TEAM_ID"
+APPLE_SIWA_KEY_ID = "REPLACE_WITH_SIGN_IN_WITH_APPLE_KEY_ID"
+
+# Secrets are NOT stored in this file. Set them once with:
+#   npx wrangler secret put APNS_PRIVATE_KEY        (full contents of the APNs .p8 file)
+#   npx wrangler secret put APPLE_SIWA_PRIVATE_KEY  (full contents of the Sign in with Apple .p8 file;
+#                                                    can be the same .p8 as APNs if the key has both)
+#   npx wrangler secret put ANTHROPIC_API_KEY       (sk-ant-...)
+# For local development put them in a .dev.vars file (never commit it).
