@@ -204,9 +204,12 @@ final class TripStore {
 
     /// Deletes every local row (sign-out, account deletion, switching servers).
     func wipeAll() {
-        try? context.delete(model: Item.self)
-        try? context.delete(model: Member.self)
-        try? context.delete(model: Trip.self)
+        // Fetch-and-delete instead of the batch `context.delete(model:)`: a batch delete bypasses
+        // objects already registered in the main context, so @Query views could keep showing the
+        // previous account's rows until relaunch. The data set is small, so this is cheap.
+        for item in (try? context.fetch(FetchDescriptor<Item>())) ?? [] { context.delete(item) }
+        for member in (try? context.fetch(FetchDescriptor<Member>())) ?? [] { context.delete(member) }
+        for trip in (try? context.fetch(FetchDescriptor<Trip>())) ?? [] { context.delete(trip) }
         try? context.save()
     }
 

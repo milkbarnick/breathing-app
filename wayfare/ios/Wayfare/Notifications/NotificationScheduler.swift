@@ -16,6 +16,9 @@ final class NotificationScheduler {
 
     private var rescheduleTask: Task<Void, Never>?
     private var rescheduleAgain = false
+    /// Bumped by `cancelAll()`, so a reschedule pass that was already awaiting when the user signed out
+    /// can't re-add the previous account's reminders afterwards.
+    private var generation = 0
 
     /// Pass `enabled: false` in previews and tests.
     init(enabled: Bool = true) {
@@ -53,6 +56,7 @@ final class NotificationScheduler {
 
     private func performReschedule() async {
         guard let center else { return }
+        let startGeneration = generation
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
@@ -64,6 +68,7 @@ final class NotificationScheduler {
         let plan = ReminderPlanner.plan(items: itemsProvider(), now: Date(), deviceZone: .current)
         let desired = Set(plan.map(\.identifier))
         let pending = await center.pendingNotificationRequests()
+        guard generation == startGeneration else { return }
         let stale = pending.map(\.identifier).filter {
             $0.hasPrefix(ReminderPlanner.identifierPrefix) && !desired.contains($0)
         }
@@ -71,12 +76,14 @@ final class NotificationScheduler {
             center.removePendingNotificationRequests(withIdentifiers: stale)
         }
         for reminder in plan {
+            guard generation == startGeneration else { return }
             try? await center.add(makeRequest(reminder))
         }
     }
 
     /// Removes every item reminder (sign-out, account deletion).
     func cancelAll() {
+        generation += 1
         guard let center else { return }
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()

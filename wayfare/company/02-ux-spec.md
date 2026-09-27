@@ -458,7 +458,7 @@ A `Form`-style inset grouped list:
 **Step 2: Loading**
 - Replaces the content in place. It shows the `sparkles` symbol with a pulsing `symbolEffect(.pulse)` (static under Reduce Motion), "Reading your confirmation…", and after 6s the second line "This can take up to 30 seconds."
 - **Cancel** cancels the request and returns to Step 1 with the text intact.
-- Timeout at 45s → error state.
+- Timeout at 100s (server gives up at 90s) → error state. (A "long emails take longer" hint after ~10s is a nice-to-have, not built yet.)
 
 **Step 3: Review drafts**
 - Title "Review {n} Plans". Header text: "Check the details. Uncheck anything you don't want."

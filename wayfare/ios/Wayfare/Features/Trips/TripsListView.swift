@@ -327,6 +327,7 @@ struct SearchableIfNeeded: ViewModifier {
     let enabled: Bool
     @Binding var text: String
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         if enabled {
             content.searchable(text: $text, placement: .navigationBarDrawer(displayMode: .automatic),

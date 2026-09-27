@@ -134,7 +134,7 @@ struct ItemFormView: View {
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isDirty)
-        .toolbar { toolbar }
+        .toolbar { toolbarItems }
         .interactiveDismissDisabled(isDirty)
         .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
             Button("Discard", role: .destructive) { close() }
@@ -170,7 +170,7 @@ struct ItemFormView: View {
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
+    private var toolbarItems: some ToolbarContent {
         if purpose != .draft || isDirty {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") {

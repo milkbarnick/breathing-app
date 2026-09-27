@@ -267,3 +267,13 @@ first error in each file and rebuild.
 - Name the trip in the "role downgraded" notice (currently a generic count).
 - UI tests for sign-in-free flows (create trip, add item offline, reminders).
 - When the backend adds `content-available`, also handle background refresh completion timing.
+
+## 10. QA follow-ups (from 06-qa-report.md)
+
+- Compile fixes: `DeviceRegistrar.hexString` is now `nonisolated` (the tests call it). The `DayMapView` map content was
+  restructured to two `ForEach`es with no `if/else`. `@ViewBuilder` was added on `SearchableIfNeeded.body`. The
+  `toolbar` members in `ItemFormView` and `TripDetailView` were renamed to `toolbarItems`.
+- Logic: `NotificationScheduler` has a `generation` guard, so no reminders are re-added after sign-out.
+  `TripStore.wipeAll` fetches and deletes each row instead of the batch delete. DEBUG builds offer briefing hours 0–23.
+- New: `Resources/PrivacyInfo.xcprivacy` (the UserDefaults `CA92.1` reason and the collected data types).
+- Open decision: the AI import client timeout is 45 s, but the server allows 90 s (see 06 §5, risk 4).

@@ -115,10 +115,10 @@ final class APIClient {
 
     // MARK: - AI import
 
-    /// Drafts only; nothing is saved on the server. 45 s timeout per the UX spec.
+    /// Drafts only; nothing is saved on the server. 100 s timeout: longer than the server's 90 s Anthropic call, so the app never gives up on an import the server is still finishing (and counting).
     func importDrafts(tripId: String, text: String) async throws -> [ItemDraftDTO] {
         let response: ImportResponseDTO = try await send(
-            .post, "/v1/trips/\(pathSafe(tripId))/import", body: ImportRequest(text: text), timeout: 45)
+            .post, "/v1/trips/\(pathSafe(tripId))/import", body: ImportRequest(text: text), timeout: 100)
         return response.items
     }
 

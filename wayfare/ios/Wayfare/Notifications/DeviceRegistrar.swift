@@ -24,7 +24,12 @@ final class DeviceRegistrar {
     }
 
     /// Hours offered in Settings (5 AM to 11 AM). The contract accepts 0–23.
+    /// DEBUG builds offer every hour so QA can force a briefing by picking the current hour.
+    #if DEBUG
+    static let briefingHours = Array(0...23)
+    #else
     static let briefingHours = Array(5...11)
+    #endif
 
     init(api: APIClient, defaults: UserDefaults = .standard) {
         self.api = api
@@ -36,7 +41,8 @@ final class DeviceRegistrar {
     }
 
     /// Lowercase hex of the APNs device token.
-    static func hexString(from deviceToken: Data) -> String {
+    /// `nonisolated`: pure, and called from the (nonisolated) unit tests.
+    nonisolated static func hexString(from deviceToken: Data) -> String {
         deviceToken.map { String(format: "%02x", $0) }.joined()
     }
 

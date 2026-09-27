@@ -138,7 +138,7 @@ struct TripDetailView: View {
         .offlineBanner(network)
         .navigationTitle("\(trip.coverEmoji) \(trip.displayTitle)")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar(trip, role: role) }
+        .toolbar { toolbarItems(trip, role: role) }
         .sheet(item: $addRequest) { request in
             ItemEditorView(trip: trip, mode: .new(kind: request.kind, day: request.day))
         }
@@ -196,7 +196,7 @@ struct TripDetailView: View {
     }
 
     @ToolbarContentBuilder
-    private func toolbar(_ trip: Trip, role: MemberRole) -> some ToolbarContent {
+    private func toolbarItems(_ trip: Trip, role: MemberRole) -> some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button {
                 showingShare = true

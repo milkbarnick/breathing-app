@@ -39,25 +39,25 @@ struct DayMapView: View {
         let dayItems = itemsForSelection
         let pins = makePins(dayItems)
         let missing = dayItems.filter { !$0.hasCoordinates && $0.kind != .note }
+        // Computed outside the MapContentBuilder, which then only needs plain `if` (no if/else, no `let`).
+        let numberedPins = pins.filter { $0.number != nil }
+        let symbolPins = pins.filter { $0.number == nil }
+        let route = selectedDay != nil ? routeCoordinates(pins) : []
 
         Map(position: $position, selection: $selectedId) {
-            ForEach(pins) { pin in
-                if let number = pin.number {
-                    Marker(pin.item.title, monogram: Text("\(number)"), coordinate: pin.coordinate)
-                        .tint(pin.item.kind.pinColor)
-                        .tag(pin.id)
-                } else {
-                    Marker(pin.item.title, systemImage: pin.item.kind.filledSymbol, coordinate: pin.coordinate)
-                        .tint(pin.item.kind.pinColor)
-                        .tag(pin.id)
-                }
+            ForEach(numberedPins) { pin in
+                Marker(pin.item.title, monogram: Text("\(pin.number ?? 0)"), coordinate: pin.coordinate)
+                    .tint(pin.item.kind.pinColor)
+                    .tag(pin.id)
             }
-            if selectedDay != nil {
-                let route = routeCoordinates(pins)
-                if route.count > 1 {
-                    MapPolyline(coordinates: route)
-                        .stroke(Palette.accent.opacity(0.6), style: StrokeStyle(lineWidth: 3, dash: [6, 6]))
-                }
+            ForEach(symbolPins) { pin in
+                Marker(pin.item.title, systemImage: pin.item.kind.filledSymbol, coordinate: pin.coordinate)
+                    .tint(pin.item.kind.pinColor)
+                    .tag(pin.id)
+            }
+            if route.count > 1 {
+                MapPolyline(coordinates: route)
+                    .stroke(Palette.accent.opacity(0.6), style: StrokeStyle(lineWidth: 3, dash: [6, 6]))
             }
             if locationAuthorized {
                 UserAnnotation()
