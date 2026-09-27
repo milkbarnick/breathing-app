@@ -24,6 +24,7 @@ Change this file first, then the code.
 ```json
 { "id": "uuid", "displayName": "Nick", "email": "x@privaterelay.appleid.com", "createdAt": 1727000000000 }
 ```
+`email` may be `null` (Apple doesn't always share it).
 
 ### Trip
 ```json
@@ -36,7 +37,7 @@ Change this file first, then the code.
   "endDate": "2026-10-09",
   "timeZone": "Europe/Lisbon",
   "coverEmoji": "🇵🇹",
-  "colorHex": "#2F6FEB",
+  "colorHex": "#0A6B7C",
   "notes": "",
   "updatedAt": 1727000000000,
   "deletedAt": null
@@ -134,6 +135,7 @@ Side effect: sends a push to the trip's **other** members' devices that have `co
 
 ### `POST /v1/trips/:tripId/invites`
 Request: `{ "role": "editor" | "viewer" }`. Owner/editor only.
+Codes are 8 characters from an unambiguous uppercase alphabet. The server ignores case, spaces, and hyphens when accepting them.
 Response `200 { "code": "8-char code", "url": "wayfare://invite/<code>", "expiresAt": "ISO instant" }`. Codes expire after 7 days.
 
 ### `POST /v1/invites/:code/accept` → `200 Trip` (idempotent if already a member). `404` if the code is unknown or expired.
@@ -149,6 +151,8 @@ Rate limit: 30 imports per user per day → `429 rate_limited`.
 The client must get a one-time, explicit in-app consent before the first import ("Pasted text is sent to Anthropic to extract your plans"), per Guideline 5.1.2. The consent lives on the client only; the server does not check it.
 
 ## Server-initiated push notifications (APNs)
+
+All pushes include `"content-available": 1` in `aps`, so the app can sync in the background.
 
 | Type | Trigger | `aps` payload | Custom keys |
 |---|---|---|---|

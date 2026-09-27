@@ -77,7 +77,8 @@ export function apnsConfigured(env) {
 
 /** Builds the JSON payload: aps alert + the contract's custom keys. */
 export function buildPayload({ title, body, custom = {} }) {
-  return { aps: { alert: { title, body }, sound: 'default' }, ...custom };
+  // content-available lets iOS wake the app to sync (and reschedule reminders) before the user taps.
+  return { aps: { alert: { title, body }, sound: 'default', 'content-available': 1 }, ...custom };
 }
 
 /** Whether an APNs response means the device token is dead and the row should go. */

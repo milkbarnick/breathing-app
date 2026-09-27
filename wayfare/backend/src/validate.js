@@ -177,7 +177,7 @@ export function validateTripInput(body) {
     endDate: null,
     timeZone: timeZone(body, 'timeZone', { required: true }),
     coverEmoji: str(body, 'coverEmoji', { max: LIMITS.coverEmoji }),
-    colorHex: str(body, 'colorHex', { max: 7, def: '#2F6FEB' }),
+    colorHex: str(body, 'colorHex', { max: 7, def: '#0A6B7C' }),
     notes: str(body, 'notes', { max: LIMITS.notes }),
   };
   for (const key of ['startDate', 'endDate']) {
@@ -185,7 +185,7 @@ export function validateTripInput(body) {
     trip[key] = body[key];
   }
   if (trip.endDate < trip.startDate) throw badRequest('endDate must be on or after startDate.');
-  if (!COLOR_RE.test(trip.colorHex)) throw badRequest('colorHex must look like "#2F6FEB".');
+  if (!COLOR_RE.test(trip.colorHex)) throw badRequest('colorHex must look like "#0A6B7C".');
   return trip;
 }
 

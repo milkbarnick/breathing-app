@@ -59,7 +59,7 @@ describe('trip input', () => {
   });
   it('applies defaults for optional fields', () => {
     const t = validateTripInput({ title: 'T', startDate: '2026-10-01', endDate: '2026-10-01', timeZone: 'UTC' });
-    expect(t).toMatchObject({ destination: '', coverEmoji: '', colorHex: '#2F6FEB', notes: '' });
+    expect(t).toMatchObject({ destination: '', coverEmoji: '', colorHex: '#0A6B7C', notes: '' });
   });
   it.each([
     [{ title: '' }, 'title'],

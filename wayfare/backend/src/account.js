@@ -117,7 +117,7 @@ export function accountDeletionStatements(db, userId, now) {
     `DELETE FROM push_log WHERE user_id = ?1 OR trip_id IN (${owned})`,
     `DELETE FROM trip_members WHERE user_id = ?1 AND trip_id IN (${owned})`,
     `UPDATE trips SET title = '', destination = '', start_date = '1970-01-01', end_date = '1970-01-01',
-              time_zone = 'UTC', cover_emoji = '', color_hex = '#2F6FEB', notes = '',
+              time_zone = 'UTC', cover_emoji = '', color_hex = '#0A6B7C', notes = '',
               updated_at = ?2, deleted_at = COALESCE(deleted_at, ?2)
         WHERE owner_id = ?1`,
     'UPDATE trip_members SET deleted_at = ?2, updated_at = ?2 WHERE user_id = ?1 AND deleted_at IS NULL',

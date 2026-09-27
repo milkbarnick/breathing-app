@@ -354,7 +354,7 @@ describe('collaborator push', () => {
     const p = pushes()[0];
     expect(p.url).toBe(`https://api.push.apple.com/3/device/${TOKEN_A}`);
     expect(JSON.parse(p.init.body)).toEqual({
-      aps: { alert: { title: 'Lisbon & Porto', body: 'Sam added “Pastéis” to Lisbon & Porto' }, sound: 'default' },
+      aps: { alert: { title: 'Lisbon & Porto', body: 'Sam added “Pastéis” to Lisbon & Porto' }, sound: 'default', 'content-available': 1 },
       type: 'itemChanged', tripId: T1, itemId: I2,
     });
     advance(60_000);
@@ -393,7 +393,7 @@ describe('daily briefing', () => {
     expect(await runBriefings(env, Date.UTC(2026, 9, 2, 6, 0, 0))).toBe(2);
     const body = JSON.parse(pushes()[0].init.body);
     expect(body).toEqual({
-      aps: { alert: { title: 'Today in Lisbon', body: '2 plans · first: Breakfast at 8:30' }, sound: 'default' },
+      aps: { alert: { title: 'Today in Lisbon', body: '2 plans · first: Breakfast at 8:30' }, sound: 'default', 'content-available': 1 },
       type: 'briefing', tripId: T1, date: '2026-10-02',
     });
     // A second run in the same hour doesn't repeat it.
